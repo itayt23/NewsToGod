@@ -31,7 +31,7 @@ class MarketSentiment:
         self.all_technical_df = pd.DataFrame()
         self.total_scores = 0
         total_properties = 70
-        load_dotenv()
+        load_dotenv("api.env")
         self.news_sentiment = market_news_sentiment(25)
         update_total_score(self,self.news_sentiment)
         for market in indices:

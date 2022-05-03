@@ -16,7 +16,7 @@ import seaborn as sns
 class NewsProcessor:
 
     def __init__(self,category,news_number):
-        load_dotenv()
+        load_dotenv("api.env")
         self.tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
         self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
         self.category = category
