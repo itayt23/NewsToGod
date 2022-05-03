@@ -84,7 +84,7 @@ if __name__ == '__main__':
     # print(news.text)
     # news_data = json.loads(news.text)
     # print(news_data)
-    news = NewsProcessor('all',2)
+    news = NewsProcessor('all',3)
     news.plot_news()
     # market = MarketSentiment()
 
