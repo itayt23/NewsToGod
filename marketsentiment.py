@@ -22,7 +22,7 @@ import os
 #wrtie final score formula
 
 class MarketSentiment:
-    def __init__(self):
+    def __init__(self,news_number):
         indices = ['spy','qqq','dia']
         self.market_df = pd.DataFrame(index=['SPX','NDX','DJI'],columns=['News Sentiment','SA quant','SA authors','TipRanks score',
             'Technical Score daily','Technical Score weekly','Technical Score monthly','Final Score'])
@@ -32,7 +32,7 @@ class MarketSentiment:
         self.total_scores = 0
         total_properties = 70
         load_dotenv("api.env")
-        self.news_sentiment = market_news_sentiment(25)
+        self.news_sentiment = market_news_sentiment(news_number)
         update_total_score(self,self.news_sentiment)
         for market in indices:
             market_index = convert_indicies(market)
