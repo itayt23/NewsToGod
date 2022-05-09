@@ -9,7 +9,7 @@ class Layout:
         [sg.T("")],
         [sg.Button("Get Markets Sentiment",font=('15')), sg.T("     "), sg.Button("Visualize News Sentiment",font=('15'))],
         [sg.T("")],
-        [sg.Text("Progress: ",font=('15')), sg.ProgressBar(max_value=2, orientation='h', size=(30,20), key="-PROG-",bar_color="gray")],
+        [sg.Text("Progress: ",font=('15')), sg.ProgressBar(max_value=3, orientation='h', size=(30,20), key="-PROG-",bar_color="gray")],
         [sg.Output(key='-OUT1-', size=(100, 8))],
         [sg.Button("Exit",size=(8,1),font=('15'))]]              
 

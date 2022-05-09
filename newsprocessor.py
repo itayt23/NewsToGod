@@ -40,55 +40,63 @@ class NewsProcessor:
         else: return 'Netural'
 
     def plot_news(self):
+        print(type(self.news_sentiment_df))
+        data = pd.DataFrame(self.news_sentiment_df)
+        print(type(data))
         results_path = Path.cwd() / 'Results' / 'Stats plots' 
         if not results_path.exists():
             results_path.mkdir(parents=True)
-        spx = yf.Ticker('SPY').history(period='2d')
-        spx_change = ((spx['Close'][1]/spx['Close'][0])-1)*100
-        spx_change = round(spx_change, 2)
-        date = datetime.now().strftime("%Y_%m_%d")
-        plt.figure(figsize=(12,8), dpi=150)
-        plt.xlabel(date)
-        plt.rcParams.update({'axes.facecolor':'silver'})
-        plt.rc('font', size =5)
-        plt.subplot(2,2,3)
-        sns.violinplot(data=self.news_sentiment_df, x='Sector', y='Sentiment', linewidth=1, bw=0.3, width=1.3)
-        sns.swarmplot(data=self.news_sentiment_df, x='Sector', y='Sentiment', color='black')
-        plt.xticks(rotation=45)
-        plt.ylabel("Sentiment",fontsize=6)
-        plt.grid(axis = 'y')
+        try:
+            spx = yf.Ticker('SPY').history(period='2d')
+            spx_change = ((spx['Close'][1]/spx['Close'][0])-1)*100
+            spx_change = round(spx_change, 2)
+            date = datetime.now().strftime("%Y_%m_%d")
+            plt.figure(figsize=(12,8), dpi=150)
+            plt.xlabel(date)
+            plt.rcParams.update({'axes.facecolor':'silver'})
+            plt.rc('font', size =5)
+            plt.subplot(2,2,3)
+            # is throwing wxception dont know whyyyyyyy godamet
+            # sns.violinplot(data=data, x='Sector', y='Sentiment', linewidth=1, bw=0.3, width=1.3)
+            sns.swarmplot(data=data, x='Sector', y='Sentiment', color='black')
+            plt.xticks(rotation=45)
+            plt.ylabel("Sentiment",fontsize=6)
+            plt.grid(axis = 'y')
 
-        plt.subplot(2,2,2)
-        plt.xticks(rotation=45)
-        sns.swarmplot(data=self.news_sentiment_df, x='Sector', y='Change')
-        plt.grid(axis = 'y')
-        plt.axhline(y = spx_change, color = 'black', linestyle = '--', label='SPX')
-        plt.legend()
+            plt.subplot(2,2,2)
+            plt.xticks(rotation=45)
+            sns.swarmplot(data=data, x='Sector', y='Change')
+            plt.grid(axis = 'y')
+            plt.axhline(y = spx_change, color = 'black', linestyle = '--', label='SPX')
+            plt.legend()
 
-        plt.subplot(2,2,1)
-        plt.xticks(rotation=45)
-        sns.scatterplot(data=self.news_sentiment_df, x="Sentiment", y="Change", hue="Sector",size="Change", sizes=(10,180))
-        plt.axhline(y = spx_change, color = 'black', linestyle = '--', label='SPX')
-        plt.legend(bbox_to_anchor=(1.01, 1),borderaxespad=0)
-        plt.grid(axis = 'y')
-
-
-        plt.subplot(2,2,4)
-        plt.xticks(rotation=45)
-        sns.stripplot(data=self.news_sentiment_df, x="Change", y="Sector", hue="Sentiment", palette=['red','green','orange'])
-        plt.ylabel("")
-        plt.axvline(x = spx_change, color = 'black', linestyle = '--', label='SPX')
-        plt.legend(bbox_to_anchor=(1.09, 1),borderaxespad=0)
-        plt.grid(axis = 'y')
+            plt.subplot(2,2,1)
+            plt.xticks(rotation=45)
+            sns.scatterplot(data=data, x="Sentiment", y="Change", hue="Sector",size="Change", sizes=(10,180))
+            plt.axhline(y = spx_change, color = 'black', linestyle = '--', label='SPX')
+            plt.legend(bbox_to_anchor=(1.01, 1),borderaxespad=0)
+            plt.grid(axis = 'y')
 
 
-        plt.subplots_adjust(left=0.1,
-                            bottom=0.1, 
-                            right=0.95, 
-                            top=0.9, 
-                            wspace=0.4, 
-                            hspace=0.4)
-        plt.savefig(results_path / f'results_{date}', dpi=300)
+            plt.subplot(2,2,4)
+            plt.xticks(rotation=45)
+            sns.stripplot(data=data, x="Change", y="Sector", hue="Sentiment", palette=['red','green','orange'])
+            plt.ylabel("")
+            plt.axvline(x = spx_change, color = 'black', linestyle = '--', label='SPX')
+            plt.legend(bbox_to_anchor=(1.09, 1),borderaxespad=0)
+            plt.grid(axis = 'y')
+
+
+            plt.subplots_adjust(left=0.1,
+                                bottom=0.1, 
+                                right=0.95, 
+                                top=0.9, 
+                                wspace=0.4, 
+                                hspace=0.4)
+            plt.savefig(results_path / f'results_{date}', dpi=300)
+            plt.show()
+        except:
+            print("Error occured while trying to plotting news analysis...")
 
 def news_score(self):
     news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Tickers', 'Sector','Industery', 'Change', 'Date', "URL"])

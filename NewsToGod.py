@@ -1,14 +1,26 @@
 
+from itertools import count
 from newsprocessor import NewsProcessor
 from marketsentiment import MarketSentiment
 import time
 from window import Layout
 import PySimpleGUI as sg
+import threading
 
+global counter
+def run_market_sentiment(news_num):
+    MarketSentiment(news_num)
 
-def run():
-    pass
-  
+def run_news_processor(news_num):
+    news = NewsProcessor('all',news_num)
+    news.plot_news()
+
+def time_counter():
+    global counter
+    counter = 0
+    while(counter < 10000):
+        time.sleep(1)
+        counter += 1
 
 def process_user_input():
     done = False
@@ -21,14 +33,15 @@ def process_user_input():
         if event == "Get Markets Sentiment":
             window["-PROG-"].UpdateBar(1)
             news_num = values["-NEWS_NUMBER-"]
-            MarketSentiment(news_num)
+            run_market_sentiment(news_num)
             window["-PROG-"].UpdateBar(2)
             done = True
         if event == "Visualize News Sentiment":
             window["-PROG-"].UpdateBar(1)
             news_num = values["-NEWS_NUMBER-"]
-            NewsProcessor('all',news_num)
+            run_news_processor(news_num)
             window["-PROG-"].UpdateBar(2)
+            window["-PROG-"].UpdateBar(3)
             done = True
         if(done):
             print("NewsToGod was finish successfully! =)")
@@ -40,4 +53,6 @@ def process_user_input():
 if __name__ == '__main__':
     process_user_input()
     #need to change news sentiment score calculate
+
+
 

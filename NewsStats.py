@@ -12,7 +12,7 @@ import yfinance as yf
 
 data_path = Path.cwd() / 'Results' / 'csv_files' / 'all news'
 date = datetime.now().strftime("%Y_%m_%d")
-sentiment_news = pd.read_csv(data_path / "news_sentiment_2022_05_03-03_36_39.csv")
+sentiment_news = pd.read_csv(data_path / "news_sentiment_2022_05_09-09_56_29.csv")
 spx = yf.Ticker('SPY').history(period='2d')
 change = ((spx['Close'][1]/spx['Close'][0])-1)*100
 change = round(change, 2)
@@ -49,8 +49,8 @@ plt.grid(axis = 'y')
 
 plt.subplot(2,2,4)
 plt.xticks(rotation=45)
-colors = {'0':'tab:red', '1':'tab:green', '2':'tab:blue'}
-sns.stripplot(data=sentiment_news, x="Change", y="Sector", hue="Sentiment", palette=['red','green','orange'])
+# colors = {'-1':'tab:red', '0':'tab:green', '1':'tab:blue'}
+sns.stripplot(data=sentiment_news, x="Change", y="Sector", hue="Sentiment", palette=['red','orange','green'])
 plt.ylabel("")
 plt.axvline(x = change, color = 'black', linestyle = '--', label='SPX')
 plt.legend(bbox_to_anchor=(1.09, 1),borderaxespad=0)
@@ -67,8 +67,8 @@ plt.savefig(results_path / f'results_{date}', dpi=300)
 # plt.show()
 
 
-fig = px.scatter(data_frame=sentiment_news, x="Sentiment", y="Change", hover_name="Sector", hover_data=['Tickers','HeadLine'])
-fig.show()
+# fig = px.scatter(data_frame=sentiment_news, x="Sentiment", y="Change", hover_name="Sector", hover_data=['Tickers','HeadLine'])
+# fig.show()
 
-fig2 = px.scatter(data_frame=sentiment_news, x="Sector", y="Change", hover_name="Tickers", hover_data=['HeadLine'])
-fig2.show()
+# fig2 = px.scatter(data_frame=sentiment_news, x="Sector", y="Change", hover_name="Tickers", hover_data=['HeadLine'])
+# fig2.show()
