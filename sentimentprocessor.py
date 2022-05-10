@@ -1,3 +1,4 @@
+from ctypes import sizeof
 import requests
 import json
 import yfinance as yf
@@ -21,7 +22,7 @@ class SentimentProcessor:
         self.news_number = news_number
         self.news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Tickers', 'Sector','Industery', 'Change', 'Date', "URL"])
         self.market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Tickers', 'Sector','Industery', 'Change', 'Date', "URL"])
-        self.articles_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Tickers', 'Sector','Industery', 'Change', 'Date', "URL"])
+        self.articles_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
         
 
     def get_news_df(self):
@@ -38,7 +39,7 @@ class SentimentProcessor:
         results_path = Path.cwd() / 'Results' / 'csv_files' /'all news'
         if not results_path.exists():
             results_path.mkdir(parents=True)
-        news_data = get_all_news_dict(self)
+        news_data = get_news_dict(self)
         news_extractor(self,news_data)
         self.news_sentiment_df.to_csv(results_path / f"news_sentiment_{date}.csv")
     
@@ -47,7 +48,7 @@ class SentimentProcessor:
         results_path = Path.cwd() / 'Results' / 'csv_files' /'Market news'
         if not results_path.exists():
             results_path.mkdir(parents=True)
-        news_data = get_all_news_dict(self, 'market')
+        news_data = get_news_dict(self, 'market')
         news_extractor(self,news_data,'market')
         del self.market_news_sentiment_df['Tickers']
         del self.market_news_sentiment_df['Sector']
@@ -56,7 +57,63 @@ class SentimentProcessor:
         self.market_news_sentiment_df.to_csv(results_path / f"news_sentiment_{date}.csv")
 
     def run_articles_processor(self):
-        pass
+        articles = []
+        new_row = {}
+        counter = 1 
+        sum = 0
+        date = datetime.now().strftime("%Y_%m_%d-%I_%M_%S")
+        results_path = Path.cwd() / 'Results' / 'csv_files' /'Articles'
+        if not results_path.exists():
+            results_path.mkdir(parents=True)
+
+        url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
+        headers = {
+         "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
+         "X-RapidAPI-Key": os.getenv('sa_api_key')
+        }
+        for page in range(0,5):
+            querystring = {"until":"0","since":"0","size":"40","number":page,"category":"market-outlook"}
+
+            articels_list = requests.request("GET", url, headers=headers, params=querystring)
+            articels_list = json.loads(articels_list.text)
+            articels_list = articels_list['data']
+            for article_id in articels_list:
+                articles.append(article_id['id'])
+
+        url = "https://seeking-alpha.p.rapidapi.com/articles/get-details"
+        for id in articles:
+            print(f'Finish analyse {counter} articles')
+            querystring = {"id": id}
+            article = requests.request("GET", url, headers=headers, params=querystring)
+            article = json.loads(article.text)
+            article_url = article['data']['links']['canonical']
+            article = article['data']['attributes']
+            article_title = article['title']
+            article_date = article['publishOn']
+            article_content = article['content']
+            article_content = clean_content(article_content)
+            article_content_score = sentiment_score(self,article_content)
+            article_summary = article['summary']
+            for article_no in article_summary:
+                sum += (sentiment_score(self,article_no))
+            if(sum > 0 ): article_summary_score = 1
+            elif(sum == 0): article_summary_score = 0
+            elif(sum < 0): article_summary_score = -1
+
+            if(article_summary_score == article_content_score) : final_score = article_content_score
+            else: final_score = 0
+
+            new_row['HeadLine'] = article_title
+            new_row['Sentiment'] = final_score
+            new_row['Date'] = article_date
+            new_row["URL"] = article_url
+
+            self.articles_sentiment_df = self.articles_sentiment_df.append(new_row, ignore_index=True)
+            new_row.clear()
+            counter += 1
+        self.articles_sentiment_df.to_csv(results_path / f"news_sentiment_{date}.csv")
+
+            
     
     def get_market_news_sentiment(self):
         sentiment = self.market_news_sentiment_df['Sentiment'].sum()
@@ -144,9 +201,8 @@ def news_extractor(self,news_data,category = 'all'):
         url = str(url).replace('"',"")
         content = clean_content(content)
         score = sentiment_score(self,content)
-        # new_row['Sentiment'] = score_string(score)
         new_row['HeadLine'] = title
-        new_row['Sentiment'] = score_num(score)
+        new_row['Sentiment'] = score
         new_row['Date'] = date_time
         new_row["URL"] = url
         for stock in new['relationships']['primaryTickers']['data']:
@@ -175,7 +231,7 @@ def news_extractor(self,news_data,category = 'all'):
             new_row.clear()
 
 
-def get_all_news_dict(self, category = 'all'):
+def get_news_dict(self, category = 'all'):
         if(category == 'market'):
             querystring = {"category":"market-news::us-economy","until":"0","since":"0","size":self.get_news_number(),"number":"1"}
         else:
@@ -190,11 +246,25 @@ def get_all_news_dict(self, category = 'all'):
         news_data = json.loads(news.text)
         return news_data
 
+
+def get_articels_list(self):
+    url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
+
+    querystring = {"until":"0","since":"0","size":"20","number":"1","category":"market-outlook"}
+
+    headers = {
+	    "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
+	    "X-RapidAPI-Key": "cc6a8d8228mshafc0d4b0ccd770ap1b399cjsna358d8033ba0"
+    }
+    articels_list = requests.request("GET", url, headers=headers, params=querystring)
+    articels_list = json.loads(articels_list.text)
+    return articels_list
+
 def sentiment_score(self,headline):
     tokens = self.tokenizer(headline,padding = True, truncation = True,  return_tensors='pt')
     result = self.model(**tokens)
     result = torch.nn.functional.softmax(result.logits, dim=-1)
-    return int(torch.argmax(result))+1
+    return score_num(int(torch.argmax(result))+1)
 
 def clean_content(content):
     bad = False
