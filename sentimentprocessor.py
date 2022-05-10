@@ -60,15 +60,11 @@ class SentimentProcessor:
     
     def get_market_news_sentiment(self):
         sentiment = self.market_news_sentiment_df['Sentiment'].sum()
-        if(sentiment < 0): return 'Negative'
-        if sentiment > 0 : return 'Positive'
-        else: return 'Netural'
+        return score_to_sentiment(sentiment/self.news_number)
 
     def get_news_sentiment(self):
         sentiment = self.news_sentiment_df['Sentiment'].sum()
-        if(sentiment < 0): return 'Negative'
-        if sentiment > 0 : return 'Positive'
-        else: return 'Netural'
+        return score_to_sentiment(sentiment/self.news_number)
 
     def plot_news(self):
         print(type(self.news_sentiment_df))
@@ -239,6 +235,11 @@ def concat_stocks(stocks_news_dict):
             stocks = stocks +", "+ value
     return stocks
 
-
+def score_to_sentiment(score):
+    if(-1 <= score < -0.5): return ("Strong Sell")
+    elif( -0.5 <= score < -0.1): return ("Sell")
+    elif(-0.1 <= score <= 0.1): return ("Netural")
+    elif(0.1 < score <= 0.5): return ("Buy")
+    elif(0.5 < score <=1): return ("Strong Buy")
 
 
