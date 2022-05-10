@@ -81,8 +81,9 @@ def download_symbol_data(market):
     return market_1d, market_1wk, market_1mo, market_price
 
 def market_news_sentiment(news_number):
-    news_processor = SentimentProcessor('Market',news_number)
-    return news_processor.get_sentiment()
+    news_processor = SentimentProcessor(news_number)
+    news_processor.run_market_news_processor()
+    return news_processor.get_market_news_sentiment()
 
 def technical_score(self,market_1d, market_1wk, market_1mo, market_price,market):
     last_data_wk = -2

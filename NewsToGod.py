@@ -19,7 +19,8 @@ def run_market_sentiment(news_num):
     MarketSentiment(news_num)
 
 def run_news_processor(news_num):
-    news = SentimentProcessor('all',news_num)
+    news = SentimentProcessor(news_num)
+    news.run_news_processor()
     news.plot_news()
 
 def update_progrees_bar():

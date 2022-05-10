@@ -14,11 +14,10 @@ import seaborn as sns
 
 class SentimentProcessor:
 
-    def __init__(self,category,news_number):
+    def __init__(self,news_number):
         load_dotenv("api.env")
         self.tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
         self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
-        self.category = category
         self.news_number = news_number
         self.news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Tickers', 'Sector','Industery', 'Change', 'Date', "URL"])
         self.market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Tickers', 'Sector','Industery', 'Change', 'Date', "URL"])
@@ -30,9 +29,6 @@ class SentimentProcessor:
 
     def get_articles_df(self):
         return self.articles_sentiment_df
-
-    def get_category(self):
-        return self.category
 
     def get_news_number(self):
         return self.news_number
@@ -53,16 +49,22 @@ class SentimentProcessor:
             results_path.mkdir(parents=True)
         news_data = get_all_news_dict(self, 'market')
         news_extractor(self,news_data,'market')
-        del self.news_sentiment_df['Tickers']
-        del self.news_sentiment_df['Sector']
-        del self.news_sentiment_df['Industery']
-        del self.news_sentiment_df['Change']        
+        del self.market_news_sentiment_df['Tickers']
+        del self.market_news_sentiment_df['Sector']
+        del self.market_news_sentiment_df['Industery']
+        del self.market_news_sentiment_df['Change']        
         self.market_news_sentiment_df.to_csv(results_path / f"news_sentiment_{date}.csv")
 
     def run_articles_processor(self):
         pass
     
-    def get_sentiment(self):
+    def get_market_news_sentiment(self):
+        sentiment = self.market_news_sentiment_df['Sentiment'].sum()
+        if(sentiment < 0): return 'Negative'
+        if sentiment > 0 : return 'Positive'
+        else: return 'Netural'
+
+    def get_news_sentiment(self):
         sentiment = self.news_sentiment_df['Sentiment'].sum()
         if(sentiment < 0): return 'Negative'
         if sentiment > 0 : return 'Positive'

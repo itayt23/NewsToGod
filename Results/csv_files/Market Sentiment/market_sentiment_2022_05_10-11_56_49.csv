@@ -1,0 +1,4 @@
+,News Sentiment,Article Sentiment,Technical Score daily,Technical Score weekly,Technical Score monthly,Final Score
+SPX,Negative,,Strong Sell,Sell,Netural,Sell
+NDX,Negative,,Strong Sell,Strong Sell,Netural,Sell
+DJI,Negative,,Strong Sell,Sell,Buy,Sell
