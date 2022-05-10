@@ -12,26 +12,93 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
+class SentimentProcessor:
 
-class NewsProcessor:
-
-    def __init__(self,category,news_number):
+    def __init__(self,category,kind,news_number):
         load_dotenv("api.env")
         self.tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
         self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
         self.category = category
+        self.kind = kind
         self.news_number = news_number
-        self.news_sentiment_df = news_score(self)
+        self.news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Tickers', 'Sector','Industery', 'Change', 'Date', "URL"])
         
 
     def get_news_df(self):
         return self.news_sentiment_df
-    
+
     def get_category(self):
         return self.category
+    
+    def get_kind(self):
+        return self.kind
 
     def get_news_number(self):
         return self.news_number
+
+    def run_news_processor(self):
+        date = datetime.now().strftime("%Y_%m_%d-%I_%M_%S")
+        if(self.kind == 'Market'):
+            results_path = Path.cwd() / 'Results' / 'csv_files' /'Market news'
+        else:
+            results_path = Path.cwd() / 'Results' / 'csv_files' /'all news'
+        if not results_path.exists():
+            results_path.mkdir(parents=True)
+        news_data = get_all_news_dict(self)
+        stocks_news_dict = {}
+        all_stocks_dict = {}
+        new_row = {}
+        change = 0
+        for stocks_keys in news_data['included']:
+            try:
+                all_stocks_dict[stocks_keys['id']] = stocks_keys['attributes']['name']
+            except:
+                all_stocks_dict[stocks_keys['id']] = 'None'
+        for new in news_data['data']:
+            title = new['attributes']['title']
+            date_time = new['attributes']['publishOn']
+            content = new['attributes']['content']
+            url = new['links']['canonical']
+            url = str(url).replace('"',"")
+            content = clean_content(content)
+            score = sentiment_score(self,content)
+            # new_row['Sentiment'] = score_string(score)
+            new_row['HeadLine'] = title
+            new_row['Sentiment'] = score_num(score)
+            new_row['Date'] = date_time
+            new_row["URL"] = url
+            for stock in new['relationships']['primaryTickers']['data']:
+                stocks_news_dict[stock['id']]= ''
+            for key,value in all_stocks_dict.items():
+                if key in stocks_news_dict.keys():
+                    stocks_news_dict[key] = value
+            new_row['Tickers'] = concat_stocks(stocks_news_dict)
+            if(stocks_news_dict):
+                try:
+                    first_ticker = yf.Ticker(list(stocks_news_dict.values())[0])
+                    new_row['Industery'] = first_ticker.get_info()['industry']
+                    new_row['Sector'] = first_ticker.get_info()['sector']
+                except:
+                   new_row['Industery'] =""
+                   new_row['Sector'] =""
+                try:
+                    ticker_data = first_ticker.history(period='2d')
+                    change = ((ticker_data['Close'][1]/ticker_data['Close'][0])-1)*100
+                    new_row["Change"] = change
+                except:
+                    new_row["Change"] = ""
+            self.news_sentiment_df = self.news_sentiment_df.append(new_row, ignore_index=True)
+            stocks_news_dict.clear()
+            new_row.clear()
+        if(self.kind == 'Market'):
+            del self.news_sentiment_df['Tickers']
+            del self.news_sentiment_df['Sector']
+            del self.news_sentiment_df['Industery']
+            del self.news_sentiment_df['Change']        
+        self.news_sentiment_df.to_csv(results_path / f"news_sentiment_{date}.csv")
+
+    def run_articles_processor(self):
+        pass
     
     def get_sentiment(self):
         sentiment = self.news_sentiment_df['Sentiment'].sum()
@@ -98,71 +165,9 @@ class NewsProcessor:
         except:
             print("Error occured while trying to plotting news analysis...")
 
-def news_score(self):
-    news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Tickers', 'Sector','Industery', 'Change', 'Date', "URL"])
-    date = datetime.now().strftime("%Y_%m_%d-%I_%M_%S")
-    if(self.category == 'Market'):
-        results_path = Path.cwd() / 'Results' / 'csv_files' /'Market news'
-    else:
-        results_path = Path.cwd() / 'Results' / 'csv_files' /'all news'
-    if not results_path.exists():
-        results_path.mkdir(parents=True)
-    news_data = get_all_news_dict(self)
-    stocks_news_dict = {}
-    all_stocks_dict = {}
-    new_row = {}
-    change = 0
-    for stocks_keys in news_data['included']:
-        try:
-            all_stocks_dict[stocks_keys['id']] = stocks_keys['attributes']['name']
-        except:
-            all_stocks_dict[stocks_keys['id']] = 'None'
-    for new in news_data['data']:
-        title = new['attributes']['title']
-        date_time = new['attributes']['publishOn']
-        content = new['attributes']['content']
-        url = new['links']['canonical']
-        url = str(url).replace('"',"")
-        content = clean_content(content)
-        score = sentiment_score(self,content)
-        # new_row['Sentiment'] = score_string(score)
-        new_row['HeadLine'] = title
-        new_row['Sentiment'] = score_num(score)
-        new_row['Date'] = date_time
-        new_row["URL"] = url
-        for stock in new['relationships']['primaryTickers']['data']:
-            stocks_news_dict[stock['id']]= ''
-        for key,value in all_stocks_dict.items():
-            if key in stocks_news_dict.keys():
-                stocks_news_dict[key] = value
-        new_row['Tickers'] = concat_stocks(stocks_news_dict)
-        if(stocks_news_dict):
-            try:
-                first_ticker = yf.Ticker(list(stocks_news_dict.values())[0])
-                new_row['Industery'] = first_ticker.get_info()['industry']
-                new_row['Sector'] = first_ticker.get_info()['sector']
-            except:
-               new_row['Industery'] =""
-               new_row['Sector'] =""
-            try:
-                ticker_data = first_ticker.history(period='2d')
-                change = ((ticker_data['Close'][1]/ticker_data['Close'][0])-1)*100
-                new_row["Change"] = change
-            except:
-                new_row["Change"] = ""
-        news_sentiment_df = news_sentiment_df.append(new_row, ignore_index=True)
-        stocks_news_dict.clear()
-        new_row.clear()
-    if(self.category == 'Market'):
-        del news_sentiment_df['Tickers']
-        del news_sentiment_df['Sector']
-        del news_sentiment_df['Industery']
-        del news_sentiment_df['Change']        
-    news_sentiment_df.to_csv(results_path / f"news_sentiment_{date}.csv")
-    return news_sentiment_df
 
 def get_all_news_dict(self):
-        if(self.category == 'Market'):
+        if(self.kind == 'Market'):
             querystring = {"category":"market-news::us-economy","until":"0","since":"0","size":self.get_news_number(),"number":"1"}
         else:
             querystring = {"category":"market-news::all","until":"0","since":"0","size":self.get_news_number(),"number":"1"}

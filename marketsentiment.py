@@ -4,7 +4,7 @@ import talib as ta
 import numpy as np
 import pandas as pd
 import requests
-from newsprocessor import NewsProcessor
+from sentimentprocessor import SentimentProcessor
 from ta.trend import *
 from ta.momentum import *
 from ta.others import *
@@ -24,13 +24,13 @@ import os
 class MarketSentiment:
     def __init__(self,news_number):
         indices = ['spy','qqq','dia']
-        self.market_df = pd.DataFrame(index=['SPX','NDX','DJI'],columns=['News Sentiment','SA quant','SA authors','TipRanks score',
-            'Technical Score daily','Technical Score weekly','Technical Score monthly','Final Score'])
+        self.market_df = pd.DataFrame(index=['SPX','NDX','DJI'],columns=['News Sentiment','Article Sentiment','Technical Score daily',
+            'Technical Score weekly','Technical Score monthly','Final Score'])
         self.technical_df = pd.DataFrame(index=['daily','weekly','monthly'],columns=['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30',
             'SMA50','EMA50','SMA100','EMA100','SMA200','EMA200','RSI','STOCH','CCI','ADX','AWS','MOM','MACD','STOCHRSI','WILLIAM','ULTIMATE'])
         self.all_technical_df = pd.DataFrame()
         self.total_scores = 0
-        total_properties = 70
+        total_properties = 70 # need to change it...
         load_dotenv("api.env")
         self.news_sentiment = market_news_sentiment(news_number)
         update_total_score(self,self.news_sentiment)
@@ -39,8 +39,8 @@ class MarketSentiment:
             market_1d, market_1wk, market_1mo, market_price = download_symbol_data(market)
             market_1d, market_1wk, market_1mo = clean_df_nans(market_1d, market_1wk, market_1mo)
             technical_score(self,market_1d, market_1wk, market_1mo, market_price,market_index)
-            sa_score(self,market,market_index)
-            tip_score(self,market_index)
+            # sa_score(self,market,market_index)
+            # tip_score(self,market_index)
             final_score(self,market_index,total_properties)
             self.all_technical_df = self.all_technical_df.append(self.technical_df)
             self.total_scores = 0
@@ -81,7 +81,7 @@ def download_symbol_data(market):
     return market_1d, market_1wk, market_1mo, market_price
 
 def market_news_sentiment(news_number):
-    news_processor = NewsProcessor('Market',news_number)
+    news_processor = SentimentProcessor('Market',news_number)
     return news_processor.get_sentiment()
 
 def technical_score(self,market_1d, market_1wk, market_1mo, market_price,market):
