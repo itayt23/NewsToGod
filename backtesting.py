@@ -19,7 +19,7 @@ model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 start_date = datetime.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')
 interval = 7
 end_date = start_date
-end_date -= timedelta(interval)
+end_date -= timedelta(interval-1)
 since_timestamp = int(time.mktime(time.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')))
 until_timestamp = time.mktime(time.strptime('2022-05-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
 
