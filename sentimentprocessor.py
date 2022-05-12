@@ -83,9 +83,9 @@ class SentimentProcessor:
             for article_id in articels_list:
                 articles.append(article_id['id'])
 
-        url = "https://seeking-alpha.p.rapidapi.com/articles/get-details"
         print("STARTING TO ANALYSE ARTICLES")
         print("--------------------------------------------------------------")
+        url = "https://seeking-alpha.p.rapidapi.com/articles/get-details"
         for id in articles:
             querystring = {"id": id}
             article = requests.request("GET", url, headers=headers, params=querystring)
@@ -117,6 +117,7 @@ class SentimentProcessor:
             new_row.clear()
             print(f'Finish analyse {counter} articles')
             counter += 1
+            sum = 0
         self.market_articles_sentiment_df.to_csv(results_path / f"articles_sentiment_{date}.csv")
 
             
@@ -133,9 +134,7 @@ class SentimentProcessor:
         return score_to_sentiment(sentiment/self.news_number)
 
     def plot_news(self):
-        print(type(self.news_sentiment_df))
         data = pd.DataFrame(self.news_sentiment_df)
-        print(type(data))
         results_path = Path.cwd() / 'Results' / 'Stats plots' 
         if not results_path.exists():
             results_path.mkdir(parents=True)
