@@ -23,30 +23,29 @@ import os
 
 class MarketSentiment:
     def __init__(self,news_number):
+        load_dotenv("api.env")
         indices = ['spy','qqq','dia']
         self.market_df = pd.DataFrame(index=['SPX','NDX','DJI'],columns=['News Sentiment','Article Sentiment','Technical Score daily',
             'Technical Score weekly','Technical Score monthly','Final Score'])
         self.technical_df = pd.DataFrame(index=['daily','weekly','monthly'],columns=['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30',
             'SMA50','EMA50','SMA100','EMA100','SMA200','EMA200','RSI','STOCH','CCI','ADX','AWS','MOM','MACD','STOCHRSI','WILLIAM','ULTIMATE'])
         self.all_technical_df = pd.DataFrame()
-        self.total_scores = 0
-        total_properties = 70 # need to change it...
-        load_dotenv("api.env")
-        self.news_sentiment = market_news_sentiment(news_number)
+        nlp_processor = SentimentProcessor(news_number)
+        self.news_sentiment = market_news_sentiment(nlp_processor)
+        self.articles_sentiment = market_articles_sentiment(nlp_processor)
+        self.total_scores = nlp_processor.get_market_articles_df()['Sentiment'].sum() + nlp_processor.get_market_news_df()['Sentiment'].sum()
+        total_properties = 66 + nlp_processor.get_market_articles_df().shape[0] + nlp_processor.get_market_news_df().shape[0] 
         update_total_score(self,self.news_sentiment)
+        update_total_score(self,self.articles_sentiment)
+        update_nlp_score(self)
         for market in indices:
             market_index = convert_indicies(market)
             market_1d, market_1wk, market_1mo, market_price = download_symbol_data(market)
             market_1d, market_1wk, market_1mo = clean_df_nans(market_1d, market_1wk, market_1mo)
             technical_score(self,market_1d, market_1wk, market_1mo, market_price,market_index)
-            # sa_score(self,market,market_index)
-            # tip_score(self,market_index)
             final_score(self,market_index,total_properties)
             self.all_technical_df = self.all_technical_df.append(self.technical_df)
             self.total_scores = 0
-        self.market_df.loc["SPX",'News Sentiment'] = self.news_sentiment
-        self.market_df.loc["NDX",'News Sentiment'] = self.news_sentiment
-        self.market_df.loc["DJI",'News Sentiment'] = self.news_sentiment
         build_df(self)
         
 
@@ -80,10 +79,13 @@ def download_symbol_data(market):
         exit(7)
     return market_1d, market_1wk, market_1mo, market_price
 
-def market_news_sentiment(news_number):
-    news_processor = SentimentProcessor(news_number)
-    news_processor.run_market_news_processor()
-    return news_processor.get_market_news_sentiment()
+def market_news_sentiment(nlp_processor):
+    nlp_processor.run_market_news_processor()
+    return nlp_processor.get_market_news_sentiment()
+
+def market_articles_sentiment(nlp_processor):
+    nlp_processor.run_market_articles_processor()
+    return nlp_processor.get_market_articles_sentiment()
 
 def technical_score(self,market_1d, market_1wk, market_1mo, market_price,market):
     last_data_wk = -2
@@ -306,7 +308,7 @@ def ultimate_sentiment(self,market_1d, market_1wk, market_1mo,last_data_wk,last_
 def build_df(self):
     results_path_market = Path.cwd() / 'results' / 'csv_files' / 'Market Sentiment'
     results_path_technical = Path.cwd() / 'results' / 'csv_files' / 'Technical Sentiment'
-    date = datetime.now().strftime("%Y_%m_%d-%I_%M_%S")
+    date = datetime.now().strftime("%d.%m.%Y-%I.%M")
     if not results_path_market.exists():
         results_path_market.mkdir(parents=True)
     if not results_path_technical.exists():
@@ -495,6 +497,15 @@ def tip_score(self, market_index):
 def update_total_score(self, sentiment):
     if(sentiment == "Strong Sell" or sentiment == "Sell" or sentiment == 'Negative'): self.total_scores += (-1)
     if(sentiment == "Strong Buy" or sentiment == "Buy" or sentiment == 'Positive'): self.total_scores += 1
+
+def update_nlp_score(self):
+    self.market_df.loc["NDX",'News Sentiment'] = self.news_sentiment
+    self.market_df.loc["SPX",'News Sentiment'] = self.news_sentiment
+    self.market_df.loc["DJI",'News Sentiment'] = self.news_sentiment
+    self.market_df.loc["NDX",'Article Sentiment'] = self.articles_sentiment
+    self.market_df.loc["SPX",'Article Sentiment'] = self.articles_sentiment
+    self.market_df.loc["DJI",'Article Sentiment'] = self.articles_sentiment
+
 
 def tip_score_to_sentiment(score):
     score = round(score)

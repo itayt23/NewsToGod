@@ -22,20 +22,23 @@ class SentimentProcessor:
         self.news_number = news_number
         self.news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Tickers', 'Sector','Industery', 'Change', 'Date', "URL"])
         self.market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Tickers', 'Sector','Industery', 'Change', 'Date', "URL"])
-        self.articles_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
+        self.market_articles_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
         
 
     def get_news_df(self):
         return self.news_sentiment_df
 
-    def get_articles_df(self):
-        return self.articles_sentiment_df
+    def get_market_articles_df(self):
+        return self.market_articles_sentiment_df
+    
+    def get_market_news_df(self):
+        return self.market_news_sentiment_df
 
     def get_news_number(self):
         return self.news_number
 
     def run_news_processor(self):
-        date = datetime.now().strftime("%Y_%m_%d-%I_%M_%S")
+        date = datetime.now().strftime("%d.%m.%Y-%I.%M")
         results_path = Path.cwd() / 'Results' / 'csv_files' /'all news'
         if not results_path.exists():
             results_path.mkdir(parents=True)
@@ -44,7 +47,7 @@ class SentimentProcessor:
         self.news_sentiment_df.to_csv(results_path / f"news_sentiment_{date}.csv")
     
     def run_market_news_processor(self):
-        date = datetime.now().strftime("%Y_%m_%d-%I_%M_%S")
+        date = datetime.now().strftime("%d.%m.%Y-%I.%M")
         results_path = Path.cwd() / 'Results' / 'csv_files' /'Market news'
         if not results_path.exists():
             results_path.mkdir(parents=True)
@@ -56,12 +59,12 @@ class SentimentProcessor:
         del self.market_news_sentiment_df['Change']        
         self.market_news_sentiment_df.to_csv(results_path / f"news_sentiment_{date}.csv")
 
-    def run_articles_processor(self):
+    def run_market_articles_processor(self):
         articles = []
         new_row = {}
         counter = 1 
         sum = 0
-        date = datetime.now().strftime("%Y_%m_%d-%I_%M_%S")
+        date = datetime.now().strftime("%d.%m.%Y-%I.%M")
         results_path = Path.cwd() / 'Results' / 'csv_files' /'Articles'
         if not results_path.exists():
             results_path.mkdir(parents=True)
@@ -72,7 +75,7 @@ class SentimentProcessor:
          "X-RapidAPI-Key": os.getenv('sa_api_key')
         }
         for page in range(0,5):
-            querystring = {"until":"0","since":"0","size":"40","number":page,"category":"market-outlook"}
+            querystring = {"until":"0","since":"0","size":"5","number":page,"category":"market-outlook"}
 
             articels_list = requests.request("GET", url, headers=headers, params=querystring)
             articels_list = json.loads(articels_list.text)
@@ -81,8 +84,9 @@ class SentimentProcessor:
                 articles.append(article_id['id'])
 
         url = "https://seeking-alpha.p.rapidapi.com/articles/get-details"
+        print("STARTING TO ANALYSE ARTICLES")
+        print("--------------------------------------------------------------")
         for id in articles:
-            print(f'Finish analyse {counter} articles')
             querystring = {"id": id}
             article = requests.request("GET", url, headers=headers, params=querystring)
             article = json.loads(article.text)
@@ -100,7 +104,8 @@ class SentimentProcessor:
             elif(sum == 0): article_summary_score = 0
             elif(sum < 0): article_summary_score = -1
 
-            if(article_summary_score == article_content_score) : final_score = article_content_score
+            if((article_summary_score + article_content_score) > 0) : final_score = 1
+            elif((article_summary_score + article_content_score) < 0) : final_score = -1
             else: final_score = 0
 
             new_row['HeadLine'] = article_title
@@ -108,16 +113,20 @@ class SentimentProcessor:
             new_row['Date'] = article_date
             new_row["URL"] = article_url
 
-            self.articles_sentiment_df = self.articles_sentiment_df.append(new_row, ignore_index=True)
+            self.market_articles_sentiment_df = self.market_articles_sentiment_df.append(new_row, ignore_index=True)
             new_row.clear()
+            print(f'Finish analyse {counter} articles')
             counter += 1
-        self.articles_sentiment_df.to_csv(results_path / f"news_sentiment_{date}.csv")
+        self.market_articles_sentiment_df.to_csv(results_path / f"articles_sentiment_{date}.csv")
 
             
-    
     def get_market_news_sentiment(self):
         sentiment = self.market_news_sentiment_df['Sentiment'].sum()
-        return score_to_sentiment(sentiment/self.news_number)
+        return score_to_sentiment(sentiment/ self.market_news_sentiment_df.shape[0])
+
+    def get_market_articles_sentiment(self):
+        sentiment = self.market_articles_sentiment_df['Sentiment'].sum()
+        return score_to_sentiment(sentiment/self.market_articles_sentiment_df.shape[0])
 
     def get_news_sentiment(self):
         sentiment = self.news_sentiment_df['Sentiment'].sum()
@@ -134,7 +143,7 @@ class SentimentProcessor:
             spx = yf.Ticker('SPY').history(period='2d')
             spx_change = ((spx['Close'][1]/spx['Close'][0])-1)*100
             spx_change = round(spx_change, 2)
-            date = datetime.now().strftime("%Y_%m_%d")
+            date = datetime.now().strftime("%d_%m_%Y")
             plt.figure(figsize=(12,8), dpi=150)
             plt.xlabel(date)
             plt.rcParams.update({'axes.facecolor':'silver'})
@@ -188,6 +197,7 @@ def news_extractor(self,news_data,category = 'all'):
     all_stocks_dict = {}
     new_row = {}
     change = 0
+    counter = 1
     for stocks_keys in news_data['included']:
         try:
             all_stocks_dict[stocks_keys['id']] = stocks_keys['attributes']['name']
@@ -225,10 +235,12 @@ def news_extractor(self,news_data,category = 'all'):
                 new_row["Change"] = change
             except:
                 new_row["Change"] = ""
-            if(category == 'market'): self.market_news_sentiment_df = self.market_news_sentiment_df.append(new_row, ignore_index=True)
-            else: self.news_sentiment_df = self.news_sentiment_df.append(new_row, ignore_index=True)
-            stocks_news_dict.clear()
-            new_row.clear()
+        if(category == 'market'): self.market_news_sentiment_df = self.market_news_sentiment_df.append(new_row, ignore_index=True)
+        else: self.news_sentiment_df = self.news_sentiment_df.append(new_row, ignore_index=True)
+        stocks_news_dict.clear()
+        new_row.clear()
+        print(f'Finish analyse {counter} news')
+        counter += 1
 
 
 def get_news_dict(self, category = 'all'):
