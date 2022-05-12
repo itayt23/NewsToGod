@@ -39,7 +39,7 @@ class SentimentProcessor:
 
     def run_news_processor(self):
         date = datetime.now().strftime("%d.%m.%Y-%I.%M")
-        results_path = Path.cwd() / 'Results' / 'csv_files' /'all news'
+        results_path = Path.cwd() / 'Results' / 'csv_files' /'All news'
         if not results_path.exists():
             results_path.mkdir(parents=True)
         news_data = get_news_dict(self)
@@ -57,7 +57,7 @@ class SentimentProcessor:
         del self.market_news_sentiment_df['Sector']
         del self.market_news_sentiment_df['Industery']
         del self.market_news_sentiment_df['Change']        
-        self.market_news_sentiment_df.to_csv(results_path / f"news_sentiment_{date}.csv")
+        self.market_news_sentiment_df.to_csv(results_path / f"market_news_sentiment_{date}.csv")
 
     def run_market_articles_processor(self):
         articles = []
@@ -75,7 +75,7 @@ class SentimentProcessor:
          "X-RapidAPI-Key": os.getenv('sa_api_key')
         }
         for page in range(0,5):
-            querystring = {"until":"0","since":"0","size":"5","number":page,"category":"market-outlook"}
+            querystring = {"until":"0","since":"0","size":"2","number":page,"category":"market-outlook"}
 
             articels_list = requests.request("GET", url, headers=headers, params=querystring)
             articels_list = json.loads(articels_list.text)
