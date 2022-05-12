@@ -17,8 +17,9 @@ tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
 model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 
 start_date = datetime.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')
+interval = 7
 end_date = start_date
-end_date -= timedelta(2)
+end_date -= timedelta(interval)
 since_timestamp = int(time.mktime(time.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')))
 until_timestamp = time.mktime(time.strptime('2022-05-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
 
@@ -117,8 +118,8 @@ for week in range(0,3):
             elif(cut == False): articles[article['id']] = date
 
     analyzer(articles, start_date)
-    start_date -= timedelta(1)
-    end_date -= timedelta(1)
+    start_date -= timedelta(interval)
+    end_date -= timedelta(interval)
     since_timestamp = int(time.mktime(time.strptime(start_date.strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')))
     cut = False
     articles.clear()
