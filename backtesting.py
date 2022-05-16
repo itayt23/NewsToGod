@@ -1,4 +1,5 @@
 from timeit import timeit
+from typing import Counter
 from numpy import sinc
 import requests
 import json
@@ -23,6 +24,7 @@ import pymannkendall as mk
 
 
 # need to check if im taking monthhlylast closing price if its make sense.
+# need to check the sa_daily problem with dates... example: 09/11/21 -> 03/11/21
 
 tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
 model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
@@ -49,6 +51,7 @@ class BackTesting:
             'Technical Score weekly','Technical Score monthly','Final Score','Date'])
         self.technical_df = pd.DataFrame(index=['daily','weekly','monthly'],columns=['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30',
             'SMA50','EMA50','SMA100','EMA100','SMA200','EMA200','RSI','STOCH','CCI','ADX','AWS','MOM','MACD','STOCHRSI','WILLIAM','ULTIMATE'])
+        self.final_df = pd.DataFrame()
         indices = ['spy','qqq','dia']
         for market in indices:
             market_index = convert_indicies(market)
@@ -57,23 +60,8 @@ class BackTesting:
             add_technical_data(market_1d, market_1wk, market_1mo)
             start_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() #datetime.date
             self.market_df.loc[market_index,'Date'] = start_date
-            technical_score(market_1d, market_1wk, market_1mo)
-            self.market_df.loc[market_index, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
-            self.market_df.loc[market_index, 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
-            self.market_df.loc[market_index, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
-            self.market_df.loc[market_index, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
-            print(self.market_df)
-            technical_score(self,market_1d, market_1wk, market_1mo,market_index)
-            final_score(self,market_index,total_properties) #need to change total proporties
-            total_scores = 0
-            total_scores = 0
-            total_properties = 0
-            daily_scores = 0
-            daily_properties = 0
-            weekly_scores = 0
-            weekly_properties = 0
-            monthly_scores = 0
-            monthly_properties = 0
+            technical_score(self,market_1d, market_1wk, market_1mo)
+          
 
 
 
@@ -137,21 +125,42 @@ def add_technical_data(market_1d, market_1wk, market_1mo):
         market_1d.drop(market_1d.tail(1).index,inplace = True)
         date_1d = market_1d.loc[market_1d.index[-1]]["Date"].date() 
 
-def technical_score(market_1d, market_1wk, market_1mo):
+def technical_score(self,market_1d, market_1wk, market_1mo):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-    ma_score_daily(market_1d)
-    oscillators_score_daily(market_1d, market_1wk, market_1mo)
-    ma_score_weekly(market_1wk)
-    oscillators_score_weekly(market_1d, market_1wk, market_1mo)
-    ma_score_monthly(market_1mo)
-    oscillators_score_monthly(market_1d, market_1wk, market_1mo)
-    market_1d.drop(market_1d.tail(5).index,inplace = True)
-    market_1wk.drop(market_1wk.tail(1).index,inplace = True)
-    total_scores = daily_scores + weekly_scores + monthly_scores
-    total_properties = daily_properties + weekly_properties + monthly_properties
-    # # ma_score(self,market_1d, market_1wk, market_1mo,market)
-    # oscillators_score_daily(market_1d, market_1wk, market_1mo)
-    # technical_score_adaptation(self,market)
+    current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+    month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
+    end_date = datetime.strptime("2021-04-05", "%Y-%m-%d").date()
+    while (current_date != end_date):
+        ma_score_daily(market_1d)
+        oscillators_score_daily(market_1d, market_1wk, market_1mo)
+        ma_score_weekly(market_1wk)
+        oscillators_score_weekly(market_1d, market_1wk, market_1mo)
+        if(current_date.month == month):
+            monthly_scores = 0
+            monthly_properties = 0
+            ma_score_monthly(market_1mo)
+            oscillators_score_monthly(market_1d, market_1wk, market_1mo)
+            market_1mo.drop(market_1mo.tail(1).index,inplace = True)
+            month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
+        market_1d.drop(market_1d.tail(5).index,inplace = True)
+        market_1wk.drop(market_1wk.tail(1).index,inplace = True)
+        total_scores = daily_scores + weekly_scores + monthly_scores
+        total_properties = daily_properties + weekly_properties + monthly_properties
+        self.market_df.loc['SPX', 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
+        self.market_df.loc['SPX', 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
+        self.market_df.loc['SPX', 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
+        self.market_df.loc['SPX', 'Final Score'] = score_to_sentiment(total_scores/total_properties)
+        self.market_df.loc['SPX', 'Date'] = current_date
+        self.final_df = self.final_df.append(self.market_df)
+        current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+        total_scores = 0
+        total_properties = 0
+        daily_scores = 0
+        daily_properties = 0
+        weekly_scores = 0
+        weekly_properties = 0
+    self.final_df.to_csv(f"final_sentiment.csv")
+    
 
 def technical_score_adaptation(self,market):
     sma_flag = True
@@ -189,11 +198,12 @@ def score_to_sentiment(score):
 
 def ma_score_daily(market_1d):
     global daily_scores, daily_properties
+    temp_df = pd.DataFrame()
     it_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
     end_date = it_date - timedelta(days=7)
     moving_averages = ['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30','SMA50','EMA50','SMA100','EMA100','SMA200','EMA200']
     temp_df = market_1d.copy(deep=True)
-    while(end_date != it_date):
+    while(end_date < it_date):
         for ma in moving_averages:
             daily_properties +=1
             if(temp_df[ma].iloc[-1] > temp_df['Close'].iloc[-1]):
@@ -202,6 +212,7 @@ def ma_score_daily(market_1d):
                 daily_scores += 1
         temp_df.drop(temp_df.tail(1).index,inplace = True)
         it_date = temp_df.loc[temp_df.index[-1]]["Date"].date()
+
 
 def ma_score_weekly(market_1wk):
     global weekly_scores, weekly_properties
@@ -229,7 +240,7 @@ def oscillators_score_daily(market_1d, market_1wk, market_1mo):
     it_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
     end_date = it_date - timedelta(days=7)
     temp_df = market_1d.copy(deep=True)
-    while(end_date != it_date):
+    while(end_date < it_date):
         rsi_sentiment_daily(temp_df, market_1wk, market_1mo)
         stochastic_sentiment_daily(temp_df)
         cci_sentiment_daily(temp_df)
@@ -484,7 +495,7 @@ def williams_sentiment_weekly(market_1d, market_1wk, market_1mo):
 
 def williams_sentiment_monthly(market_1d, market_1wk, market_1mo):
     global monthly_scores
-    if(market_1mo["WILLIAM"].iloc[-1] > -20 and trend_estimate(market_1d, market_1wk, market_1mo,"WILLIAM",'mok') < 0):
+    if(market_1mo["WILLIAM"].iloc[-1] > -20 and trend_estimate(market_1d, market_1wk, market_1mo,"WILLIAM",'1mo') < 0):
         monthly_scores += -1 
     elif(market_1mo["WILLIAM"].iloc[-1] < -80 and trend_estimate(market_1d, market_1wk, market_1mo,"WILLIAM",'1mo') > 0):
         monthly_scores += 1
@@ -522,13 +533,15 @@ def trend_estimate(market_1d, market_1wk, market_1mo,oscillator, interval):
         else : data = data[-8:-1]
     elif interval == '1mo':
         data = market_1mo[oscillator].to_numpy()
-        if(round_date_mo(market_1wk)): data = data[-7:]
+        if(round_date_mo(market_1mo)): data = data[-7:]
         else : data = data[-8:-1]
-
-    result = np.polyfit(index,list(data), 1)
-    slope = result[-2]
-    result_mk = mk.original_test(data)
-    if(result_mk.slope < 0.1 and result_mk.slope > -0.1): return 0
+    try:
+        result = np.polyfit(index,list(data), 1)
+        slope = result[-2]
+        result_mk = mk.original_test(data)
+        if(result_mk.slope < 0.1 and result_mk.slope > -0.1): return 0
+    except:
+        return 0
     return slope
 
 
