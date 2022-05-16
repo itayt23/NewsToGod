@@ -58,11 +58,14 @@ class BackTesting:
             self.market_df.loc[market_index,'Date'] = start_date
             ma_score_daily(market_1d)
             oscillators_score_daily(market_1d, market_1wk, market_1mo)
+            ma_score_weekly(market_1wk)
+            oscillators_score_weekly(market_1d, market_1wk, market_1mo)
+            market_1d.drop(market_1d.tail(5).index,inplace = True)
+            market_1wk.drop(market_1wk.tail(1).index,inplace = True)
             self.market_df.loc[market_index, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
+            self.market_df.loc[market_index, 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
             print(self.market_df)
-            # market_1d.to_csv(f"market_1d_{market}.csv")
-            # market_1wk.to_csv(f"market_1wk_{market}.csv")
-            # market_1mo.to_csv(f"market_1mo_{market}.csv")
+           #need to initialized all the scores
             technical_score(self,market_1d, market_1wk, market_1mo,market_index)
             final_score(self,market_index,total_properties) #need to change total proporties
             total_scores = 0
@@ -184,6 +187,19 @@ def ma_score_daily(market_1d):
         temp_df.drop(temp_df.tail(1).index,inplace = True)
         it_date = temp_df.loc[temp_df.index[-1]]["Date"].date()
 
+def ma_score_weekly(market_1wk):
+    global weekly_scores, weekly_properties
+    moving_averages = ['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30','SMA50','EMA50','SMA100','EMA100','SMA200','EMA200']
+    for ma in moving_averages:
+        weekly_properties +=1
+        if(market_1wk[ma].iloc[-1] > market_1wk['Close'].iloc[-1]):
+           weekly_scores += -1 
+        elif(market_1wk[ma].iloc[-1] < market_1wk['Close'].iloc[-1]):
+            weekly_scores += 1
+
+
+
+
 
 def ma_score(self,market_1d, market_1wk, market_1mo):
     global daily_scores, daily_properties
@@ -204,6 +220,226 @@ def ma_score(self,market_1d, market_1wk, market_1mo):
        elif(market_1mo[index].iloc[-1] < market_1mo['Close'].iloc[-1]):
            self.technical_df.at["monthly",index] = 1
        else: self.technical_df.at["monthly",index] = 0
+
+
+
+def oscillators_score_daily(market_1d, market_1wk, market_1mo):
+    global daily_properties
+    it_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
+    end_date = it_date - timedelta(days=7)
+    temp_df = market_1d.copy(deep=True)
+    while(end_date != it_date):
+        rsi_sentiment_daily(temp_df, market_1wk, market_1mo)
+        stochastic_sentiment_daily(temp_df)
+        cci_sentiment_daily(temp_df)
+        adx_sentiment_daily(temp_df)
+        aws_sentiment_daily(temp_df)
+        mom_sentiment_daily(temp_df,market_1wk, market_1mo)
+        macd_sentiment_daily(temp_df)
+        stochrsi_sentiment_daily(temp_df,market_1wk, market_1mo)
+        williams_sentiment_daily(temp_df,market_1wk, market_1mo)
+        ultimate_sentiment_daily(temp_df)
+        daily_properties += 10
+        temp_df.drop(temp_df.tail(1).index,inplace = True)
+        it_date = temp_df.loc[temp_df.index[-1]]["Date"].date()
+
+
+def oscillators_score_weekly(market_1d, market_1wk, market_1mo):
+    global weekly_properties
+    rsi_sentiment_weekly(market_1d, market_1wk, market_1mo)
+    stochastic_sentiment_weekly(market_1wk)
+    cci_sentiment_weekly(market_1wk)
+    adx_sentiment_weekly(market_1wk)
+    aws_sentiment_weekly(market_1wk)
+    mom_sentiment_weekly(market_1d,market_1wk, market_1mo)
+    macd_sentiment_weekly(market_1wk)
+    stochrsi_sentiment_weekly(market_1d,market_1wk, market_1mo)
+    williams_sentiment_weekly(market_1d,market_1wk, market_1mo)
+    ultimate_sentiment_weekly(market_1wk)
+    weekly_properties += 10
+
+
+# def oscillators_score(self,market_1d, market_1wk, market_1mo,market):
+#     rsi_sentiment_daily(market_1d)
+#     stochastic_sentiment_daily(market_1d)
+#     cci_sentiment(self,market_1d, market_1wk, market_1mo)
+#     adx_sentiment(self,market_1d, market_1wk, market_1mo)
+#     aws_sentiment(self,market_1d, market_1wk, market_1mo)
+#     mom_sentiment(self,market_1d, market_1wk, market_1mo)
+#     macd_sentiment(self,market_1d, market_1wk, market_1mo)
+#     stochrsi_sentiment(self,market_1d, market_1wk, market_1mo)
+#     williams_sentiment(self,market_1d, market_1wk, market_1mo)
+#     ultimate_sentiment(self,market_1d, market_1wk, market_1mo)
+
+def rsi_sentiment_daily(market_1d, market_1wk, market_1mo):
+    global daily_scores
+    if(market_1d["RSI"].iloc[-1] > 70 and trend_estimate(market_1d, market_1wk, market_1mo,"RSI",'1d') < 0):
+        daily_scores += -1 
+    elif(market_1d["RSI"].iloc[-1] < 30 and trend_estimate(market_1d, market_1wk, market_1mo,"RSI",'1d') > 0):
+       daily_scores += 1
+
+def rsi_sentiment_weekly(market_1d, market_1wk, market_1mo):
+    global weekly_scores
+    if(market_1wk["RSI"].iloc[-1] > 70 and trend_estimate(market_1d, market_1wk, market_1mo,"RSI",'1wk') < 0):
+        weekly_scores += -1 
+    elif(market_1wk["RSI"].iloc[-1] < 30 and trend_estimate(market_1d, market_1wk, market_1mo,"RSI",'1wk') > 0):
+       weekly_scores += 1
+
+
+def stochastic_sentiment_daily(market_1d):
+    global daily_scores
+    if(market_1d["STOCH_S"].iloc[-1] > 80 and market_1d["STOCH_S"].iloc[-1] <= market_1d["STOCH_M"].iloc[-1]):
+        daily_scores += -1 
+    elif(market_1d["STOCH_S"].iloc[-1] < 20 and market_1d["STOCH_S"].iloc[-1] >= market_1d["STOCH_M"].iloc[-1]):
+        daily_scores += 1
+
+
+def stochastic_sentiment_weekly(market_1wk):
+    global weekly_scores
+    if(market_1wk["STOCH_S"].iloc[-1] > 80 and market_1wk["STOCH_S"].iloc[-1] <= market_1wk["STOCH_M"].iloc[-1]):
+        weekly_scores += -1 
+    elif(market_1wk["STOCH_S"].iloc[-1] < 20 and market_1wk["STOCH_S"].iloc[-1] >= market_1wk["STOCH_M"].iloc[-1]):
+        weekly_scores += 1
+
+def cci_sentiment_daily(market_1d):
+    global daily_scores
+    if(market_1d["CCI"].iloc[-1] > 100 and market_1d["CCI"].iloc[-1] < market_1d["CCI"].iloc[-2]):
+        daily_scores += -1 
+    elif(market_1d["CCI"].iloc[-1] < -100 and market_1d["CCI"].iloc[-1] > market_1d["CCI"].iloc[-2]):
+        daily_scores += 1
+
+def cci_sentiment_weekly(market_1wk):
+    global weekly_scores
+    if(market_1wk["CCI"].iloc[-1] > 100 and market_1wk["CCI"].iloc[-1] < market_1wk["CCI"].iloc[-2]):
+        weekly_scores += -1 
+    elif(market_1wk["CCI"].iloc[-1] < -100 and market_1wk["CCI"].iloc[-1] > market_1wk["CCI"].iloc[-2]):
+        weekly_scores += 1
+
+def adx_sentiment_daily(market_1d):
+    global daily_scores
+    if(market_1d["ADX"].iloc[-1] > 20 and market_1d["ADX_D+"].iloc[-1] < market_1d["ADX_D-"].iloc[-1]):
+        daily_scores += -1 
+    elif(market_1d["ADX"].iloc[-1] > 20 and market_1d["ADX_D+"].iloc[-1] > market_1d["ADX_D-"].iloc[-1]):
+        daily_scores += 1
+
+def adx_sentiment_weekly(market_1wk):
+    global weekly_scores
+    if(market_1wk["ADX"].iloc[-1] > 20 and market_1wk["ADX_D+"].iloc[-1] < market_1wk["ADX_D-"].iloc[-1]):
+        weekly_scores += -1 
+    elif(market_1wk["ADX"].iloc[-1] > 20 and market_1wk["ADX_D+"].iloc[-1] > market_1wk["ADX_D-"].iloc[-1]):
+        weekly_scores += 1
+
+def aws_sentiment_daily(market_1d):
+    global daily_scores
+    if(market_1d["AWS"].iloc[-1] < 0):
+       daily_scores += -1 
+    elif(market_1d["AWS"].iloc[-1] > 0):
+        daily_scores += 1
+
+def aws_sentiment_weekly(market_1wk):
+    global weekly_scores
+    if(market_1wk["AWS"].iloc[-1] < 0):
+       weekly_scores += -1 
+    elif(market_1wk["AWS"].iloc[-1] > 0):
+        weekly_scores += 1
+
+def mom_sentiment_daily(market_1d, market_1wk, market_1mo):
+    global daily_scores
+    if(trend_estimate(market_1d, market_1wk, market_1mo,"MOM",'1d') < 0):
+        daily_scores += -1 
+    elif(trend_estimate(market_1d, market_1wk, market_1mo,"MOM",'1d') > 0):
+        daily_scores += 1
+
+
+def mom_sentiment_weekly(market_1d, market_1wk, market_1mo):
+    global weekly_scores
+    if(trend_estimate(market_1d, market_1wk, market_1mo,"MOM",'1wk') < 0):
+        weekly_scores += -1 
+    elif(trend_estimate(market_1d, market_1wk, market_1mo,"MOM",'1wk') > 0):
+        weekly_scores += 1
+
+def macd_sentiment_daily(market_1d):
+    global daily_scores
+    if(market_1d["MACD"].iloc[-1] < market_1d["MACD_S"].iloc[-1]):
+        daily_scores += -1 
+    elif(market_1d["MACD"].iloc[-1] > market_1d["MACD_S"].iloc[-1]):
+        daily_scores += 1
+
+def macd_sentiment_weekly(market_1wk):
+    global weekly_scores
+    if(market_1wk["MACD"].iloc[-1] < market_1wk["MACD_S"].iloc[-1]):
+        weekly_scores += -1 
+    elif(market_1wk["MACD"].iloc[-1] > market_1wk["MACD_S"].iloc[-1]):
+        weekly_scores += 1
+
+def stochrsi_sentiment_daily(market_1d, market_1wk, market_1mo):
+    global daily_scores
+    if(trend_estimate(market_1d, market_1wk, market_1mo,"STOCHRSI_K",'1d') > 0 and market_1d["STOCHRSI_K"].iloc[-1] > 80 and market_1d["STOCHRSI_D"].iloc[-1] > 80
+        and market_1d["STOCHRSI_K"].iloc[-1] < market_1d["STOCHRSI_D"].iloc[-1]):
+        daily_scores += -1 
+    elif(trend_estimate(market_1d, market_1wk, market_1mo,"STOCHRSI_K",'1d') < 0 and market_1d["STOCHRSI_K"].iloc[-1] < 20 and market_1d["STOCHRSI_D"].iloc[-1] < 20
+        and market_1d["STOCHRSI_K"].iloc[-1] > market_1d["STOCHRSI_D"].iloc[-1]):
+        daily_scores += 1
+
+
+def stochrsi_sentiment_weekly(market_1d, market_1wk, market_1mo):
+    global weekly_scores
+    if(trend_estimate(market_1d, market_1wk, market_1mo,"STOCHRSI_K",'1wk') > 0 and market_1wk["STOCHRSI_K"].iloc[-1] > 80 and market_1wk["STOCHRSI_D"].iloc[-1] > 80
+        and market_1wk["STOCHRSI_K"].iloc[-1] < market_1wk["STOCHRSI_D"].iloc[-1]):
+        weekly_scores += -1 
+    elif(trend_estimate(market_1d, market_1wk, market_1mo,"STOCHRSI_K",'1wk') < 0 and market_1wk["STOCHRSI_K"].iloc[-1] < 20 and market_1wk["STOCHRSI_D"].iloc[-1] < 20
+        and market_1wk["STOCHRSI_K"].iloc[-1] > market_1wk["STOCHRSI_D"].iloc[-1]):
+        weekly_scores += 1
+
+def williams_sentiment_daily(market_1d, market_1wk, market_1mo):
+    global daily_scores
+    if(market_1d["WILLIAM"].iloc[-1] > -20 and trend_estimate(market_1d, market_1wk, market_1mo,"WILLIAM",'1d') < 0):
+        daily_scores += -1 
+    elif(market_1d["WILLIAM"].iloc[-1] < -80 and trend_estimate(market_1d, market_1wk, market_1mo,"WILLIAM",'1d') > 0):
+        daily_scores += 1
+
+def williams_sentiment_weekly(market_1d, market_1wk, market_1mo):
+    global weekly_scores
+    if(market_1wk["WILLIAM"].iloc[-1] > -20 and trend_estimate(market_1d, market_1wk, market_1mo,"WILLIAM",'1wk') < 0):
+        weekly_scores += -1 
+    elif(market_1wk["WILLIAM"].iloc[-1] < -80 and trend_estimate(market_1d, market_1wk, market_1mo,"WILLIAM",'1wk') > 0):
+        weekly_scores += 1
+
+def ultimate_sentiment_daily(market_1d):
+    global daily_scores
+    if(market_1d["ULTIMATE"].iloc[-1] < 30):
+        daily_scores += -1 
+    elif(market_1d["ULTIMATE"].iloc[-1] > 70):
+        daily_scores += 1
+
+
+def ultimate_sentiment_weekly(market_1wk):
+    global weekly_scores
+    if(market_1wk["ULTIMATE"].iloc[-1] < 30):
+        weekly_scores += -1 
+    elif(market_1wk["ULTIMATE"].iloc[-1] > 70):
+        weekly_scores += 1
+
+def trend_estimate(market_1d, market_1wk, market_1mo,oscillator, interval):
+    index = [1,2,3,4,5,6,7]
+    if interval == '1d':
+        data = market_1d[oscillator].to_numpy()
+        data = data[-7:]
+    elif interval == '1wk':
+        data = market_1wk[oscillator].to_numpy()
+        if(round_date_wk(market_1wk)): data = data[-7:]
+        else : data = data[-8:-1]
+    elif interval == '1mo':
+        data = market_1mo[oscillator].to_numpy()
+        if(round_date_mo(market_1wk)): data = data[-7:]
+        else : data = data[-8:-1]
+
+    result = np.polyfit(index,list(data), 1)
+    slope = result[-2]
+    result_mk = mk.original_test(data)
+    if(result_mk.slope < 0.1 and result_mk.slope > -0.1): return 0
+    return slope
+
 
 def round_date_mo(df):
     last_date_mo = df.loc[df.index[-1]]["Date"].date()
@@ -256,135 +492,6 @@ def score_num(score):
         return 0
     return 0
 
-
-def oscillators_score_daily(market_1d, market_1wk, market_1mo):
-    global daily_properties
-    it_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
-    end_date = it_date - timedelta(days=7)
-    temp_df = market_1d.copy(deep=True)
-    while(end_date != it_date):
-        rsi_sentiment_daily(temp_df, market_1wk, market_1mo)
-        stochastic_sentiment_daily(temp_df)
-        cci_sentiment_daily(temp_df)
-        adx_sentiment_daily(temp_df)
-        aws_sentiment_daily(temp_df)
-        mom_sentiment_daily(temp_df,market_1wk, market_1mo)
-        macd_sentiment_daily(temp_df)
-        stochrsi_sentiment_daily(temp_df,market_1wk, market_1mo)
-        williams_sentiment_daily(temp_df,market_1wk, market_1mo)
-        ultimate_sentiment_daily(temp_df)
-        daily_properties += 10
-        temp_df.drop(temp_df.tail(1).index,inplace = True)
-        it_date = temp_df.loc[temp_df.index[-1]]["Date"].date()
-
-
-
-# def oscillators_score(self,market_1d, market_1wk, market_1mo,market):
-#     rsi_sentiment_daily(market_1d)
-#     stochastic_sentiment_daily(market_1d)
-#     cci_sentiment(self,market_1d, market_1wk, market_1mo)
-#     adx_sentiment(self,market_1d, market_1wk, market_1mo)
-#     aws_sentiment(self,market_1d, market_1wk, market_1mo)
-#     mom_sentiment(self,market_1d, market_1wk, market_1mo)
-#     macd_sentiment(self,market_1d, market_1wk, market_1mo)
-#     stochrsi_sentiment(self,market_1d, market_1wk, market_1mo)
-#     williams_sentiment(self,market_1d, market_1wk, market_1mo)
-#     ultimate_sentiment(self,market_1d, market_1wk, market_1mo)
-
-def rsi_sentiment_daily(market_1d, market_1wk, market_1mo):
-    global daily_scores
-    if(market_1d["RSI"].iloc[-1] > 70 and trend_estimate(market_1d, market_1wk, market_1mo,"RSI",'1d') < 0):
-        daily_scores += -1 
-    elif(market_1d["RSI"].iloc[-1] < 30 and trend_estimate(market_1d, market_1wk, market_1mo,"RSI",'1d') > 0):
-       daily_scores += 1
-
-
-
-def stochastic_sentiment_daily(market_1d):
-    global daily_scores
-    if(market_1d["STOCH_S"].iloc[-1] > 80 and market_1d["STOCH_S"].iloc[-1] <= market_1d["STOCH_M"].iloc[-1]):
-        daily_scores += -1 
-    elif(market_1d["STOCH_S"].iloc[-1] < 20 and market_1d["STOCH_S"].iloc[-1] >= market_1d["STOCH_M"].iloc[-1]):
-        daily_scores += 1
-
-def cci_sentiment_daily(market_1d):
-    global daily_scores
-    if(market_1d["CCI"].iloc[-1] > 100 and market_1d["CCI"].iloc[-1] < market_1d["CCI"].iloc[-2]):
-        daily_scores += -1 
-    elif(market_1d["CCI"].iloc[-1] < -100 and market_1d["CCI"].iloc[-1] > market_1d["CCI"].iloc[-2]):
-        daily_scores += 1
-
-def adx_sentiment_daily(market_1d):
-    global daily_scores
-    if(market_1d["ADX"].iloc[-1] > 20 and market_1d["ADX_D+"].iloc[-1] < market_1d["ADX_D-"].iloc[-1]):
-        daily_scores += -1 
-    elif(market_1d["ADX"].iloc[-1] > 20 and market_1d["ADX_D+"].iloc[-1] > market_1d["ADX_D-"].iloc[-1]):
-        daily_scores += 1
-
-def aws_sentiment_daily(market_1d):
-    global daily_scores
-    if(market_1d["AWS"].iloc[-1] < 0):
-       daily_scores += -1 
-    elif(market_1d["AWS"].iloc[-1] > 0):
-        daily_scores += 1
-
-def mom_sentiment_daily(market_1d, market_1wk, market_1mo):
-    global daily_scores
-    if(trend_estimate(market_1d, market_1wk, market_1mo,"MOM",'1d') < 0):
-        daily_scores += -1 
-    elif(trend_estimate(market_1d, market_1wk, market_1mo,"MOM",'1d') > 0):
-        daily_scores += 1
-
-def macd_sentiment_daily(market_1d):
-    global daily_scores
-    if(market_1d["MACD"].iloc[-1] < market_1d["MACD_S"].iloc[-1]):
-        daily_scores += -1 
-    elif(market_1d["MACD"].iloc[-1] > market_1d["MACD_S"].iloc[-1]):
-        daily_scores += 1
-
-def stochrsi_sentiment_daily(market_1d, market_1wk, market_1mo):
-    global daily_scores
-    if(trend_estimate(market_1d, market_1wk, market_1mo,"STOCHRSI_K",'1d') > 0 and market_1d["STOCHRSI_K"].iloc[-1] > 80 and market_1d["STOCHRSI_D"].iloc[-1] > 80
-        and market_1d["STOCHRSI_K"].iloc[-1] < market_1d["STOCHRSI_D"].iloc[-1]):
-        daily_scores += -1 
-    elif(trend_estimate(market_1d, market_1wk, market_1mo,"STOCHRSI_K",'1d') < 0 and market_1d["STOCHRSI_K"].iloc[-1] < 20 and market_1d["STOCHRSI_D"].iloc[-1] < 20
-        and market_1d["STOCHRSI_K"].iloc[-1] > market_1d["STOCHRSI_D"].iloc[-1]):
-        daily_scores += 1
-
-def williams_sentiment_daily(market_1d, market_1wk, market_1mo):
-    global daily_scores
-    if(market_1d["WILLIAM"].iloc[-1] > -20 and trend_estimate(market_1d, market_1wk, market_1mo,"WILLIAM",'1d') < 0):
-        daily_scores += -1 
-    elif(market_1d["WILLIAM"].iloc[-1] < -80 and trend_estimate(market_1d, market_1wk, market_1mo,"WILLIAM",'1d') > 0):
-        daily_scores += 1
-
-def ultimate_sentiment_daily(market_1d):
-    global daily_scores
-    if(market_1d["ULTIMATE"].iloc[-1] < 30):
-        daily_scores += -1 
-    elif(market_1d["ULTIMATE"].iloc[-1] > 70):
-        daily_scores += 1
-
-
-def trend_estimate(market_1d, market_1wk, market_1mo,oscillator, interval):
-    index = [1,2,3,4,5,6,7]
-    if interval == '1d':
-        data = market_1d[oscillator].to_numpy()
-        data = data[-7:]
-    elif interval == '1wk':
-        data = market_1wk[oscillator].to_numpy()
-        if(round_date_wk(market_1wk)): data = data[-7:]
-        else : data = data[-8:-1]
-    elif interval == '1mo':
-        data = market_1mo[oscillator].to_numpy()
-        if(round_date_mo(market_1wk)): data = data[-7:]
-        else : data = data[-8:-1]
-
-    result = np.polyfit(index,list(data), 1)
-    slope = result[-2]
-    result_mk = mk.original_test(data)
-    if(result_mk.slope < 0.1 and result_mk.slope > -0.1): return 0
-    return slope
 
 
 def moving_averages_extract_data(market_1d, market_1wk, market_1mo):
