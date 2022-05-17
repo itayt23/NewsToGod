@@ -51,6 +51,9 @@ class BackTesting:
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
         global index
         load_dotenv("api.env")
+        results_path = Path.cwd() / 'Results' / 'BackTesting' 
+        if not results_path.exists():
+            results_path.mkdir(parents=True)
         self.market_df = pd.DataFrame(columns=['News Sentiment','Article Sentiment','Technical Score daily',
             'Technical Score weekly','Technical Score monthly','Final Score','Date'])
         self.technical_df = pd.DataFrame(index=['daily','weekly','monthly'],columns=['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30',
@@ -63,7 +66,7 @@ class BackTesting:
             add_technical_data(market_1d, market_1wk, market_1mo)
             start_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() #datetime.date
             technical_score(self,market_1d, market_1wk, market_1mo)
-            self.market_df.to_csv(f"final_sentiment_{market}.csv")
+            self.market_df.to_csv(results_path / f"final_sentiment_{market}.csv")
             index = 0
 
 
