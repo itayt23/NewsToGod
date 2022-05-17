@@ -244,9 +244,9 @@ def news_extractor(self,news_data,category = 'all'):
 
 def get_news_dict(self, category = 'all'):
         if(category == 'market'):
-            querystring = {"category":"market-news::us-economy","until":"0","since":"0","size":self.get_news_number(),"number":"1"}
+            querystring = {"category":"market-news::us-economy","until":"0","since":"0","size":self.get_news_number(),"number":"0"}
         else:
-            querystring = {"category":"market-news::all","until":"0","since":"0","size":self.get_news_number(),"number":"1"}
+            querystring = {"category":"market-news::all","until":"0","since":"0","size":self.get_news_number(),"number":"0"}
 
         url = "https://seeking-alpha.p.rapidapi.com/news/v2/list"
         headers = {
@@ -260,8 +260,8 @@ def get_news_dict(self, category = 'all'):
 
 def get_articels_list(self):
     url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
-
-    querystring = {"until":"0","since":"0","size":"20","number":"1","category":"market-outlook"}
+#####################################
+    querystring = {"until":"0","since":"0","size":"20","number":"1","category":"market-outlook"} # here its const.... need to chage it
 
     headers = {
 	    "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",

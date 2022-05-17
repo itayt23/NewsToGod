@@ -21,7 +21,6 @@ from ta.utils import *
 from ta.volatility import *
 from ta.volume import *
 import pymannkendall as mk
-import exchange_calendars as xcals
 
 # need to check if im taking monthhlylast closing price if its make sense.
 
@@ -64,9 +63,25 @@ class BackTesting:
             market_1d, market_1wk, market_1mo = download_symbol_data(market)
             market_1d, market_1wk, market_1mo = clean_df_nans(market_1d, market_1wk, market_1mo)
             add_technical_data(market_1d, market_1wk, market_1mo)
-            start_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() #datetime.date
             technical_score(self,market_1d, market_1wk, market_1mo)
+
+
+
+
+
+
+
+
+
+
             self.market_df.to_csv(results_path / f"final_sentiment_{market}.csv")
+            total_scores = 0
+            total_properties = 0
+            daily_scores = 0
+            daily_properties = 0
+            weekly_scores = 0
+            weekly_properties = 0
+            cut = 0
             index = 0
 
 
@@ -709,37 +724,7 @@ def oscillators_extract_data(market_1d, market_1wk, market_1mo):
 
 
 
-
-
-
-
-
-
-
-
-
-
-
 BackTesting()
-# market_1d_full = pd.read_csv("market_1d_SPX.csv")
-# market_1wk_full = pd.read_csv("market_1wk_SPX.csv")
-# market_1mo_full = pd.read_csv("market_1mo_SPX.csv")
-# print(market_1wk_full.tail())
-# round_date_wk(market_1wk_full)
-# round_date_mo(market_1mo_full)
-# print(market_1wk_full.tail())
-
-
-
-
-# start_date = datetime.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')
-# interval = 7
-# end_date = start_date
-# end_date -= timedelta(interval-1)
-# since_timestamp = int(time.mktime(time.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')))
-# until_timestamp = time.mktime(time.strptime('2022-05-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
-
-
 
 
 
@@ -788,34 +773,45 @@ def articles_week_analyzer(articles, date):
         counter += 1
         sum = 0
     market_articles_sentiment_df.to_csv(results_path / f"articles_sentiment_week{date.date()}.csv")
-# articles = {}
-# cut = False
-# url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
-# headers = {
-#  "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
-#  "X-RapidAPI-Key": os.getenv('sa_api_key')
-# }
-# for week in range(0,3):
-#     for page in range(0,7):
-#         if(cut): break
-#         querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":"market-outlook"}
-#         articels_list = requests.request("GET", url, headers=headers, params=querystring)
-#         articels_list = json.loads(articels_list.text)
-#         articels_list = articels_list['data']
-#         for article in articels_list:
-#             date = article['attributes']['publishOn']
-#             date = date.replace('T'," ")
-#             date =  date[:-6]
-#             date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
-#             if(end_date.date() == date_t.date()) : cut = True
-#             elif(cut == False): articles[article['id']] = date
 
-#     articles_week_analyzer(articles, start_date)
-#     start_date -= timedelta(interval)
-#     end_date -= timedelta(interval)
-#     since_timestamp = int(time.mktime(time.strptime(start_date.strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')))
-#     cut = False
-#     articles.clear()
+
+
+
+def articles_sentiment():
+    start_date = datetime.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')
+    interval = 7
+    end_date = start_date
+    end_date -= timedelta(interval-1)
+    since_timestamp = int(time.mktime(time.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')))
+    until_timestamp = time.mktime(time.strptime('2022-05-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
+    articles = {}
+    stop = False
+    url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
+    headers = {
+     "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
+     "X-RapidAPI-Key": os.getenv('sa_api_key')
+    }
+    for week in range(0,3):
+        for page in range(0,7):
+            if(stop): break
+            querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":"market-outlook"}
+            articels_list = requests.request("GET", url, headers=headers, params=querystring)
+            articels_list = json.loads(articels_list.text)
+            articels_list = articels_list['data']
+            for article in articels_list:
+                date = article['attributes']['publishOn']
+                date = date.replace('T'," ")
+                date =  date[:-6]
+                date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
+                if(end_date.date() == date_t.date()) : stop = True
+                elif(stop == False): articles[article['id']] = date
+
+        articles_week_analyzer(articles, start_date)
+        start_date -= timedelta(interval)
+        end_date -= timedelta(interval)
+        since_timestamp = int(time.mktime(time.strptime(start_date.strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')))
+        stop = False
+        articles.clear()
 
 
 
