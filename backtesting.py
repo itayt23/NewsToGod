@@ -23,10 +23,7 @@ from ta.volume import *
 import pymannkendall as mk
 import exchange_calendars as xcals
 
-
-
 # need to check if im taking monthhlylast closing price if its make sense.
-# need to check the sa_daily problem with dates... example: 09/11/21 -> 03/11/21
 
 tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
 model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
@@ -48,6 +45,7 @@ weekly_scores = 0
 weekly_properties = 0
 monthly_scores = 0
 monthly_properties = 0
+
 class BackTesting:   
     def __init__(self):
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
@@ -67,18 +65,6 @@ class BackTesting:
             technical_score(self,market_1d, market_1wk, market_1mo)
             self.market_df.to_csv(f"final_sentiment_{market}.csv")
             index = 0
-        
-
-
-
-
-        start_date = datetime.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')
-        interval = 7
-        end_date = start_date
-        end_date -= timedelta(interval-1)
-        since_timestamp = int(time.mktime(time.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')))
-        until_timestamp = time.mktime(time.strptime('2022-05-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
-
 
 
 def final_score(self,market_index,total_properties):
@@ -125,11 +111,11 @@ def add_technical_data(market_1d, market_1wk, market_1mo):
     oscillators_extract_data(market_1d, market_1wk, market_1mo)
     round_date_wk(market_1wk)
     round_date_mo(market_1mo)
-    start_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() #datetime.date
-    date_1d = market_1d.loc[market_1d.index[-1]]["Date"].date() 
-    while(start_date != date_1d):
-        market_1d.drop(market_1d.tail(1).index,inplace = True)
-        date_1d = market_1d.loc[market_1d.index[-1]]["Date"].date() 
+    # start_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() #datetime.date
+    # date_1d = market_1d.loc[market_1d.index[-1]]["Date"].date() 
+    # while(start_date != date_1d):
+    #     market_1d.drop(market_1d.tail(1).index,inplace = True)
+    #     date_1d = market_1d.loc[market_1d.index[-1]]["Date"].date() 
 
 def technical_score(self,market_1d, market_1wk, market_1mo):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
@@ -743,6 +729,12 @@ BackTesting()
 
 
 
+# start_date = datetime.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')
+# interval = 7
+# end_date = start_date
+# end_date -= timedelta(interval-1)
+# since_timestamp = int(time.mktime(time.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')))
+# until_timestamp = time.mktime(time.strptime('2022-05-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
 
 
 
