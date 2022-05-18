@@ -24,17 +24,20 @@ import pymannkendall as mk
 
 # need to check if im taking monthhlylast closing price if its make sense.
 
+load_dotenv("api.env")
 tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
 model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
-url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
+# url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
 headers = {
  "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
  "X-RapidAPI-Key": os.getenv('sa_api_key')
 }
 
 global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-global cut, index
+global cut, index, articles_score, articles_properties
 cut = 0
+articles_properties = 0
+articles_score = 0
 index = 0
 total_scores = 0
 total_properties = 0
@@ -49,7 +52,6 @@ class BackTesting:
     def __init__(self):
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
         global index
-        load_dotenv("api.env")
         results_path = Path.cwd() / 'Results' / 'BackTesting' 
         if not results_path.exists():
             results_path.mkdir(parents=True)
@@ -137,8 +139,9 @@ def add_technical_data(market_1d, market_1wk, market_1mo):
 
 def technical_score(self,market_1d, market_1wk, market_1mo):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-    global cut, index
+    global cut, index, articles_score, articles_properties
     current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+    finish_date = market_1wk.loc[market_1wk.index[-2]]["Date"].date()
     month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
     end_date = datetime.strptime("2021-04-05", "%Y-%m-%d").date()
     while (current_date > end_date):
@@ -153,23 +156,32 @@ def technical_score(self,market_1d, market_1wk, market_1mo):
             oscillators_score_monthly(market_1d, market_1wk, market_1mo)
             market_1mo.drop(market_1mo.tail(1).index,inplace = True)
             month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
+        
+        articles_sentiment(current_date, finish_date)
+
         market_1d.drop(market_1d.tail(cut).index,inplace = True)
         market_1wk.drop(market_1wk.tail(1).index,inplace = True)
-        total_scores = daily_scores + weekly_scores + monthly_scores
-        total_properties = daily_properties + weekly_properties + monthly_properties
+        current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+        finish_date = market_1wk.loc[market_1wk.index[-2]]["Date"].date()
+        
+        total_scores = daily_scores + weekly_scores + monthly_scores + articles_score
+        total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties
     
+        self.market_df.loc[index, 'Article Sentiment'] = score_to_sentiment(articles_score/articles_properties)
         self.market_df.loc[index, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
         self.market_df.loc[index, 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
         self.market_df.loc[index, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
         self.market_df.loc[index, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
         self.market_df.loc[index, 'Date'] = current_date
-        current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+        print(self.market_df)
         total_scores = 0
         total_properties = 0
         daily_scores = 0
         daily_properties = 0
         weekly_scores = 0
         weekly_properties = 0
+        articles_score = 0
+        articles_properties = 0
         cut = 0
         index += 1
     
@@ -720,16 +732,8 @@ def oscillators_extract_data(market_1d, market_1wk, market_1mo):
     market_1mo['ULTIMATE'] = UltimateOscillator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).ultimate_oscillator()
 
 
-
-
-
-
-BackTesting()
-
-
-
-
 def articles_week_analyzer(articles, date):
+    global articles_score
     counter = 1
     sum = 0
     market_articles_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
@@ -759,6 +763,7 @@ def articles_week_analyzer(articles, date):
             if((article_summary_score + article_content_score) > 0) : final_score = 1
             elif((article_summary_score + article_content_score) < 0) : final_score = -1
             else: final_score = 0
+            articles_score += final_score
             new_row['HeadLine'] = article_title
             new_row['Sentiment'] = final_score
             new_row['Date'] = article_date
@@ -772,48 +777,43 @@ def articles_week_analyzer(articles, date):
         new_row.clear()
         counter += 1
         sum = 0
-    market_articles_sentiment_df.to_csv(results_path / f"articles_sentiment_week{date.date()}.csv")
+    market_articles_sentiment_df.to_csv(results_path / f"articles_sentiment_week_{date.date()}.csv")
 
 
 
 
-def articles_sentiment():
-    start_date = datetime.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')
-    interval = 7
-    end_date = start_date
-    end_date -= timedelta(interval-1)
-    since_timestamp = int(time.mktime(time.strptime('2022-05-10 06:59:59', '%Y-%m-%d %H:%M:%S')))
-    until_timestamp = time.mktime(time.strptime('2022-05-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
+def articles_sentiment(start_date,finish_date):
+    global articles_properties
+    start_date = datetime.strptime(f'{start_date} 06:59:59', '%Y-%m-%d %H:%M:%S')
+    stop_date = finish_date - timedelta(days=1)
+    since_timestamp = int(start_date.timestamp())
+    until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
     articles = {}
     stop = False
     url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
-    headers = {
-     "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
-     "X-RapidAPI-Key": os.getenv('sa_api_key')
-    }
-    for week in range(0,3):
-        for page in range(0,7):
-            if(stop): break
-            querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":"market-outlook"}
-            articels_list = requests.request("GET", url, headers=headers, params=querystring)
-            articels_list = json.loads(articels_list.text)
-            articels_list = articels_list['data']
-            for article in articels_list:
-                date = article['attributes']['publishOn']
-                date = date.replace('T'," ")
-                date =  date[:-6]
-                date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
-                if(end_date.date() == date_t.date()) : stop = True
-                elif(stop == False): articles[article['id']] = date
-
-        articles_week_analyzer(articles, start_date)
-        start_date -= timedelta(interval)
-        end_date -= timedelta(interval)
-        since_timestamp = int(time.mktime(time.strptime(start_date.strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')))
-        stop = False
-        articles.clear()
+    for page in range(0,7):
+        if(stop): break
+        querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":"market-outlook"}
+        articels_list = requests.request("GET", url, headers=headers, params=querystring)
+        articels_list = json.loads(articels_list.text)
+        articels_list = articels_list['data']
+        for article in articels_list:
+            date = article['attributes']['publishOn']
+            date = date.replace('T'," ")
+            date =  date[:-6]
+            date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
+            if(stop_date == date_t.date()) : stop = True
+            elif(stop == False):
+                articles[article['id']] = date
+                articles_properties += 1
+    articles_week_analyzer(articles, start_date)
+    # articles.clear()
+    # start_date -= timedelta(interval)
+    # end_date -= timedelta(interval)
+    # since_timestamp = int(time.mktime(time.strptime(start_date.strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')))
+    # stop = False
 
 
 
 
-
+BackTesting()
