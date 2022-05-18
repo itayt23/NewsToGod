@@ -1,4 +1,5 @@
 from timeit import timeit
+from tracemalloc import start
 from typing import Counter
 from numpy import sinc
 import requests
@@ -22,6 +23,9 @@ from ta.volatility import *
 from ta.volume import *
 import pymannkendall as mk
 
+# market_1d.to_csv("market_1d.csv")
+# market_1wk.to_csv("market_1wk.csv")
+# market_1mo.to_csv("market_1mo.csv")
 # need to check if im taking monthhlylast closing price if its make sense.
 
 load_dotenv("api.env")
@@ -140,8 +144,9 @@ def add_technical_data(market_1d, market_1wk, market_1mo):
 def technical_score(self,market_1d, market_1wk, market_1mo):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
     global cut, index, articles_score, articles_properties
+    start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
+    stop_date = current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
     current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
-    finish_date = market_1wk.loc[market_1wk.index[-2]]["Date"].date()
     month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
     end_date = datetime.strptime("2021-04-05", "%Y-%m-%d").date()
     while (current_date > end_date):
@@ -156,14 +161,15 @@ def technical_score(self,market_1d, market_1wk, market_1mo):
             oscillators_score_monthly(market_1d, market_1wk, market_1mo)
             market_1mo.drop(market_1mo.tail(1).index,inplace = True)
             month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
-        
-        articles_sentiment(current_date, finish_date)
+
+        articles_sentiment(start_date, stop_date)
 
         market_1d.drop(market_1d.tail(cut).index,inplace = True)
         market_1wk.drop(market_1wk.tail(1).index,inplace = True)
         current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
-        finish_date = market_1wk.loc[market_1wk.index[-2]]["Date"].date()
-        
+        start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
+        stop_date = current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
+
         total_scores = daily_scores + weekly_scores + monthly_scores + articles_score
         total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties
     
@@ -782,10 +788,12 @@ def articles_week_analyzer(articles, date):
 
 
 
-def articles_sentiment(start_date,finish_date):
+def articles_sentiment(start_date, stop_date):
     global articles_properties
+    start_date += timedelta(days=1)
     start_date = datetime.strptime(f'{start_date} 06:59:59', '%Y-%m-%d %H:%M:%S')
-    stop_date = finish_date - timedelta(days=1)
+    # start_date -= timedelta(days=2)
+    # stop_date = finish_date - timedelta(days=3)
     since_timestamp = int(start_date.timestamp())
     until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
     articles = {}
@@ -794,18 +802,21 @@ def articles_sentiment(start_date,finish_date):
     for page in range(0,7):
         if(stop): break
         querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":"market-outlook"}
-        articels_list = requests.request("GET", url, headers=headers, params=querystring)
-        articels_list = json.loads(articels_list.text)
-        articels_list = articels_list['data']
-        for article in articels_list:
-            date = article['attributes']['publishOn']
-            date = date.replace('T'," ")
-            date =  date[:-6]
-            date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
-            if(stop_date == date_t.date()) : stop = True
-            elif(stop == False):
-                articles[article['id']] = date
-                articles_properties += 1
+        try:
+            articels_list = requests.request("GET", url, headers=headers, params=querystring)
+            articels_list = json.loads(articels_list.text)
+            articels_list = articels_list['data']
+            for article in articels_list:
+                date = article['attributes']['publishOn']
+                date = date.replace('T'," ")
+                date =  date[:-6]
+                date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
+                if(stop_date == date_t.date()) : stop = True
+                elif(stop == False):
+                    articles[article['id']] = date
+                    articles_properties += 1
+        except Exception as e:
+            print(f'EXCEPTION was accured during network connection trying get articles, DETAILS: {e}')
     articles_week_analyzer(articles, start_date)
     # articles.clear()
     # start_date -= timedelta(interval)
