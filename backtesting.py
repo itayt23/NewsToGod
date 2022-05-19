@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from timeit import timeit
 from tracemalloc import start
 from typing import Counter
@@ -23,9 +24,11 @@ from ta.volatility import *
 from ta.volume import *
 import pymannkendall as mk
 
+
 # market_1d.to_csv("market_1d.csv")
 # market_1wk.to_csv("market_1wk.csv")
 # market_1mo.to_csv("market_1mo.csv")
+
 # need to check if im taking monthhlylast closing price if its make sense.
 
 load_dotenv("api.env")
@@ -39,6 +42,7 @@ headers = {
 
 global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
 global cut, index, articles_score, articles_properties, news_score, news_properties
+start_run_time = time.time()
 cut = 0
 articles_properties = 0
 articles_score = 0
@@ -66,32 +70,22 @@ class BackTesting:
         self.technical_df = pd.DataFrame(index=['daily','weekly','monthly'],columns=['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30',
             'SMA50','EMA50','SMA100','EMA100','SMA200','EMA200','RSI','STOCH','CCI','ADX','AWS','MOM','MACD','STOCHRSI','WILLIAM','ULTIMATE'])
         indices = ['spy','qqq','dia']
-        for market in indices:
+        # for market in indices:
             # market_index = convert_indicies(market)
-            market_1d, market_1wk, market_1mo = download_symbol_data(market)
-            market_1d, market_1wk, market_1mo = clean_df_nans(market_1d, market_1wk, market_1mo)
-            add_technical_data(market_1d, market_1wk, market_1mo)
-            technical_score(self,market_1d, market_1wk, market_1mo)
-
-
-
-
-
-
-
-
-
-
-            self.market_df.to_csv(results_path / f"final_sentiment_{market}.csv")
-            total_scores = 0
-            total_properties = 0
-            daily_scores = 0
-            daily_properties = 0
-            weekly_scores = 0
-            weekly_properties = 0
-            cut = 0
-            index = 0
-
+        market_1d, market_1wk, market_1mo = download_symbol_data('spy')
+        market_1d, market_1wk, market_1mo = clean_df_nans(market_1d, market_1wk, market_1mo)
+        add_technical_data(market_1d, market_1wk, market_1mo)
+        technical_score(self,market_1d, market_1wk, market_1mo)
+        self.market_df.to_csv(results_path / f"final_sentiment_spy_partly.csv")
+        print(f'TOTAL RUN TIME WAS: {time.time() - start_run_time}')
+        # total_scores = 0
+        # total_properties = 0
+        # daily_scores = 0
+        # daily_properties = 0
+        # weekly_scores = 0
+        # weekly_properties = 0
+        # cut = 0
+        # index = 0
 
 def final_score(self,market_index,total_properties):
     score =  self.total_scores/total_properties
@@ -150,7 +144,7 @@ def technical_score(self,market_1d, market_1wk, market_1mo):
     stop_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
     current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
     month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
-    end_date = datetime.strptime("2021-04-05", "%Y-%m-%d").date()
+    end_date = datetime.strptime("2022-01-01", "%Y-%m-%d").date()
     while (current_date > end_date):
         ma_score_daily(market_1d,market_1wk)
         oscillators_score_daily(market_1d, market_1wk, market_1mo)
@@ -164,7 +158,7 @@ def technical_score(self,market_1d, market_1wk, market_1mo):
             market_1mo.drop(market_1mo.tail(1).index,inplace = True)
             month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
         run_market_news_processor(start_date, stop_date)
-        articles_sentiment(start_date, stop_date)
+        run_articles_news_processor(start_date, stop_date)
 
         market_1d.drop(market_1d.tail(cut).index,inplace = True)
         market_1wk.drop(market_1wk.tail(1).index,inplace = True)
@@ -182,7 +176,6 @@ def technical_score(self,market_1d, market_1wk, market_1mo):
         self.market_df.loc[index, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
         self.market_df.loc[index, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
         self.market_df.loc[index, 'Date'] = current_date
-        print(self.market_df)
         total_scores = 0
         total_properties = 0
         daily_scores = 0
@@ -752,12 +745,8 @@ def articles_week_analyzer(articles, date):
     if not results_path.exists():
         results_path.mkdir(parents=True)
     new_row ={}
-    url = "https://seeking-alpha.p.rapidapi.com/articles/get-details"
-    for id in articles.keys():
+    for article in articles.values():
         try:
-            querystring = {"id": id}
-            article = requests.request("GET", url, headers=headers, params=querystring)
-            article = json.loads(article.text)
             article_url = article['data']['links']['canonical']
             article = article['data']['attributes']
             article_title = article['title']
@@ -780,17 +769,37 @@ def articles_week_analyzer(articles, date):
             new_row['Date'] = article_date
             new_row["URL"] = article_url
             market_articles_sentiment_df = market_articles_sentiment_df.append(new_row, ignore_index=True)
-            print(f'Finish analyse {counter} articles')
+            print(f'Finish analyse {counter} articles at week {date} | TOTAL RUNTIME: {round((time.time() - start_run_time)/60, 2)} minutes')
         except Exception as e:
-            print(f'Problem accured in article No.{counter}')
-            print(f'Error details: {e}')
+            print(f'Problem accured in article No.{counter}, Error details: {e}')
 
         new_row.clear()
         counter += 1
         sum = 0
     market_articles_sentiment_df.to_csv(results_path / f"articles_sentiment_week_{date.date()}.csv")
 
+def get_all_articles(id):
+    url = "https://seeking-alpha.p.rapidapi.com/articles/get-details"
+    querystring = {"id": id}
+    try:
+        article = requests.request("GET", url, headers=headers, params=querystring)
+        article = json.loads(article.text)
+        print(id)
+    except Exception as e:
+        print(f'Problem at one of the articles ENCODING PROBLEM: {e}')
+    return article
 
+def run_articles_news_processor(start_date, stop_date):
+    articles = {}
+    articles_id = articles_sentiment(start_date, stop_date)
+    count = 0
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        all_articles = executor.map(get_all_articles, articles_id)
+        executor.shutdown(wait=True)
+    for article in all_articles:
+        articles[count] = article
+        count += 1
+    articles_week_analyzer(articles,start_date)
 
 
 def articles_sentiment(start_date, stop_date):
@@ -801,7 +810,7 @@ def articles_sentiment(start_date, stop_date):
     # stop_date = finish_date - timedelta(days=3)
     since_timestamp = int(start_date.timestamp())
     until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
-    articles = {}
+    articles = []
     stop = False
     url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
     for page in range(0,7):
@@ -818,11 +827,11 @@ def articles_sentiment(start_date, stop_date):
                 date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
                 if(stop_date == date_t.date()) : stop = True
                 elif(stop == False):
-                    articles[article['id']] = date
+                    articles.append(article['id'])
                     articles_properties += 1
         except Exception as e:
             print(f'EXCEPTION was accured during network connection trying get articles, DETAILS: {e}')
-    articles_week_analyzer(articles, start_date)
+    return articles
 
 def run_market_news_processor(start_date, stop_date):
     market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
@@ -831,11 +840,11 @@ def run_market_news_processor(start_date, stop_date):
     if not results_path.exists():
         results_path.mkdir(parents=True)
     news_data = get_news_dict(start_date, stop_date)
-    market_news_sentiment_df = news_extractor(news_data)       
+    market_news_sentiment_df = news_extractor(news_data, start_date)       
     market_news_sentiment_df.to_csv(results_path / f"market_news_sentiment_{date}.csv")
 
 
-def news_extractor(news_data):
+def news_extractor(news_data, date):
     global news_score
     market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
     stocks_news_dict = {}
@@ -857,7 +866,7 @@ def news_extractor(news_data):
         market_news_sentiment_df = market_news_sentiment_df.append(new_row, ignore_index=True)
         stocks_news_dict.clear()
         new_row.clear()
-        print(f'Finish analyse {counter} news')
+        print(f'Finish analyse {counter} news at week {date} | TOTAL RUN TIME: {round((time.time() - start_run_time)/60, 2)} minutes')
         counter += 1
     return market_news_sentiment_df
 
