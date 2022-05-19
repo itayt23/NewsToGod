@@ -38,10 +38,12 @@ headers = {
 }
 
 global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-global cut, index, articles_score, articles_properties
+global cut, index, articles_score, articles_properties, news_score, news_properties
 cut = 0
 articles_properties = 0
 articles_score = 0
+news_score = 0
+news_properties = 0
 index = 0
 total_scores = 0
 total_properties = 0
@@ -143,7 +145,7 @@ def add_technical_data(market_1d, market_1wk, market_1mo):
 
 def technical_score(self,market_1d, market_1wk, market_1mo):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-    global cut, index, articles_score, articles_properties
+    global cut, index, articles_score, articles_properties, news_score, news_properties
     start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
     stop_date = current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
     current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
@@ -161,7 +163,7 @@ def technical_score(self,market_1d, market_1wk, market_1mo):
             oscillators_score_monthly(market_1d, market_1wk, market_1mo)
             market_1mo.drop(market_1mo.tail(1).index,inplace = True)
             month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
-
+        run_market_news_processor(start_date, stop_date)
         articles_sentiment(start_date, stop_date)
 
         market_1d.drop(market_1d.tail(cut).index,inplace = True)
@@ -170,9 +172,10 @@ def technical_score(self,market_1d, market_1wk, market_1mo):
         start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
         stop_date = current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
 
-        total_scores = daily_scores + weekly_scores + monthly_scores + articles_score
-        total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties
-    
+        total_scores = daily_scores + weekly_scores + monthly_scores + articles_score + news_score
+        total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties + news_properties
+
+        self.market_df.loc[index, 'News Sentiment'] = score_to_sentiment(news_score/news_properties)
         self.market_df.loc[index, 'Article Sentiment'] = score_to_sentiment(articles_score/articles_properties)
         self.market_df.loc[index, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
         self.market_df.loc[index, 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
@@ -188,6 +191,8 @@ def technical_score(self,market_1d, market_1wk, market_1mo):
         weekly_properties = 0
         articles_score = 0
         articles_properties = 0
+        news_score = 0
+        news_properties = 0
         cut = 0
         index += 1
     
@@ -818,13 +823,84 @@ def articles_sentiment(start_date, stop_date):
         except Exception as e:
             print(f'EXCEPTION was accured during network connection trying get articles, DETAILS: {e}')
     articles_week_analyzer(articles, start_date)
-    # articles.clear()
-    # start_date -= timedelta(interval)
-    # end_date -= timedelta(interval)
-    # since_timestamp = int(time.mktime(time.strptime(start_date.strftime('%Y-%m-%d %H:%M:%S'), '%Y-%m-%d %H:%M:%S')))
-    # stop = False
+
+def run_market_news_processor(start_date, stop_date):
+    market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
+    date = datetime.now().strftime("%d.%m.%Y-%I.%M")
+    results_path = Path.cwd() / 'Results' / 'BackTesting' /'News Sentiment'
+    if not results_path.exists():
+        results_path.mkdir(parents=True)
+    news_data = get_news_dict(start_date, stop_date)
+    market_news_sentiment_df = news_extractor(news_data)       
+    market_news_sentiment_df.to_csv(results_path / f"market_news_sentiment_{date}.csv")
 
 
+def news_extractor(news_data):
+    global news_score
+    market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
+    stocks_news_dict = {}
+    new_row = {}
+    counter = 1
+    for key, new in news_data.items():
+        title = new['attributes']['title']
+        date_time = new['attributes']['publishOn']
+        content = new['attributes']['content']
+        url = new['links']['canonical']
+        url = str(url).replace('"',"")
+        content = clean_content(content)
+        score = sentiment_score(content)
+        news_score += score
+        new_row['HeadLine'] = title
+        new_row['Sentiment'] = score
+        new_row['Date'] = date_time
+        new_row["URL"] = url
+        market_news_sentiment_df = market_news_sentiment_df.append(new_row, ignore_index=True)
+        stocks_news_dict.clear()
+        new_row.clear()
+        print(f'Finish analyse {counter} news')
+        counter += 1
+    return market_news_sentiment_df
+
+
+def get_news_dict(start_date, stop_date):    
+    global news_properties
+    news = {}
+    stop = False
+    start_date += timedelta(days=1)
+    start_date = datetime.strptime(f'{start_date} 06:59:59', '%Y-%m-%d %H:%M:%S')
+    since_timestamp = int(start_date.timestamp())
+    until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
+    url = "https://seeking-alpha.p.rapidapi.com/news/v2/list"
+    for page in range(0,7):
+        if(stop): break
+        querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":"market-news::us-economy"}
+        try:
+            news_data = requests.request("GET", url, headers=headers, params=querystring)
+            news_data = json.loads(news_data.text)
+            news_data = news_data['data']
+            for new in news_data:
+                date = new['attributes']['publishOn']
+                date = date.replace('T'," ")
+                date =  date[:-6]
+                date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
+                if(stop_date == date_t.date()) : stop = True
+                elif(stop == False):
+                    news[date] = new
+                    news_properties += 1
+        except Exception as e:
+            print(f'EXCEPTION was accured during network connection trying get News, DETAILS: {e}')
+    return news
+
+
+
+def concat_stocks(stocks_news_dict):
+    stocks = ""
+    for key,value in stocks_news_dict.items():
+        if(stocks == ""):
+            stocks = value
+        else:
+            stocks = stocks +", "+ value
+    return stocks
 
 
 BackTesting()
