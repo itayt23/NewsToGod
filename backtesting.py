@@ -147,7 +147,7 @@ def technical_score(self,market_1d, market_1wk, market_1mo):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
     global cut, index, articles_score, articles_properties, news_score, news_properties
     start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
-    stop_date = current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
+    stop_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
     current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
     month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
     end_date = datetime.strptime("2021-04-05", "%Y-%m-%d").date()
