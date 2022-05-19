@@ -30,6 +30,8 @@ import pymannkendall as mk
 # market_1mo.to_csv("market_1mo.csv")
 
 # need to check if im taking monthhlylast closing price if its make sense.
+#add try and except in every place you need 
+# add finish print line after finish reading article or news
 
 load_dotenv("api.env")
 tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
@@ -776,7 +778,7 @@ def articles_week_analyzer(articles, date):
         new_row.clear()
         counter += 1
         sum = 0
-    market_articles_sentiment_df.to_csv(results_path / f"articles_sentiment_week_{date.date()}.csv")
+    market_articles_sentiment_df.to_csv(results_path / f"articles_sentiment_week_{date}.csv")
 
 def get_all_articles(id):
     url = "https://seeking-alpha.p.rapidapi.com/articles/get-details"
@@ -784,7 +786,6 @@ def get_all_articles(id):
     try:
         article = requests.request("GET", url, headers=headers, params=querystring)
         article = json.loads(article.text)
-        print(id)
     except Exception as e:
         print(f'Problem at one of the articles ENCODING PROBLEM: {e}')
     return article
