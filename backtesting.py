@@ -23,6 +23,7 @@ from ta.utils import *
 from ta.volatility import *
 from ta.volume import *
 import pymannkendall as mk
+import traceback
 
 
 # market_1d.to_csv("market_1d.csv")
@@ -77,8 +78,8 @@ class BackTesting:
         market_1d, market_1wk, market_1mo = download_symbol_data('spy')
         market_1d, market_1wk, market_1mo = clean_df_nans(market_1d, market_1wk, market_1mo)
         add_technical_data(market_1d, market_1wk, market_1mo)
-        technical_score(self,market_1d, market_1wk, market_1mo)
-        self.market_df.to_csv(results_path / f"final_sentiment_spy_partly.csv")
+        run_back_testing(self,market_1d, market_1wk, market_1mo)
+        self.market_df.to_csv(results_path / f"final_sentiment_spy.csv")
         print(f'TOTAL RUN TIME WAS: {time.time() - start_run_time}')
         # total_scores = 0
         # total_properties = 0
@@ -89,10 +90,6 @@ class BackTesting:
         # cut = 0
         # index = 0
 
-def final_score(self,market_index,total_properties):
-    score =  self.total_scores/total_properties
-    self.market_df.loc[market_index,'Final Score'] = score_to_sentiment(score)
-
 def convert_indicies(market):
     if(market == 'spy'): return 'SPX'
     if(market == 'qqq'): return 'NDX'
@@ -101,7 +98,7 @@ def convert_indicies(market):
 
 def download_symbol_data(market):
     try:
-        market_1d = yf.download(market,period='2y',interval='1d')
+        market_1d = yf.download(market,period='5y',interval='1d')
         market_1d = pd.DataFrame(market_1d)
         market_1d.reset_index(inplace=True)
         market_1wk = yf.download(market,period='10y',interval='1wk')
@@ -110,8 +107,8 @@ def download_symbol_data(market):
         market_1mo = yf.download(market,period='max',interval='1mo')
         market_1mo = pd.DataFrame(market_1mo)
         market_1mo.reset_index(inplace=True)
-    except:
-        print(f"Problem with download data, symbol is {market}")
+    except Exception as e:
+        print(f"Problem with download data, symbol is {market}, Details: \n {traceback.format_exc()}")
         exit(7)
     return market_1d, market_1wk, market_1mo
 
@@ -139,14 +136,17 @@ def add_technical_data(market_1d, market_1wk, market_1mo):
     #     market_1d.drop(market_1d.tail(1).index,inplace = True)
     #     date_1d = market_1d.loc[market_1d.index[-1]]["Date"].date() 
 
-def technical_score(self,market_1d, market_1wk, market_1mo):
+def run_back_testing(self,market_1d, market_1wk, market_1mo):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
     global cut, index, articles_score, articles_properties, news_score, news_properties
-    start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
-    stop_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
-    current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
-    month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
-    end_date = datetime.strptime("2022-01-01", "%Y-%m-%d").date()
+    try:
+        start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
+        stop_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
+        current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+        month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
+        end_date = datetime.strptime("2021-01-01", "%Y-%m-%d").date()
+    except Exception as e:
+        print(f"Problem was acuured during getting last date, Details: \n {traceback.format_exc()}")
     while (current_date > end_date):
         ma_score_daily(market_1d,market_1wk)
         oscillators_score_daily(market_1d, market_1wk, market_1mo)
@@ -228,65 +228,81 @@ def score_to_sentiment(score):
 
 def ma_score_daily(market_1d,market_1wk):
     global daily_scores, daily_properties, cut
-    temp_df = pd.DataFrame()
-    it_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
-    start_week_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
-    start_next_week_date = start_week_date + timedelta(days=7)
-    moving_averages = ['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30','SMA50','EMA50','SMA100','EMA100','SMA200','EMA200']
-    temp_df = market_1d.copy(deep=True)
-    while(start_next_week_date > it_date >= start_week_date):
-        for ma in moving_averages:
-            daily_properties +=1
-            if(temp_df[ma].iloc[-1] > temp_df['Close'].iloc[-1]):
-               daily_scores += -1 
-            elif(temp_df[ma].iloc[-1] < temp_df['Close'].iloc[-1]):
-                daily_scores += 1
-        temp_df.drop(temp_df.tail(1).index,inplace = True)
-        cut += 1
-        it_date = temp_df.loc[temp_df.index[-1]]["Date"].date()
-
+    try:
+        temp_df = pd.DataFrame()
+        it_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
+        start_week_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+        start_next_week_date = start_week_date + timedelta(days=7)
+        moving_averages = ['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30','SMA50','EMA50','SMA100','EMA100','SMA200','EMA200']
+        temp_df = market_1d.copy(deep=True)
+        while(start_next_week_date > it_date >= start_week_date):
+            for ma in moving_averages:
+                daily_properties +=1
+                if(temp_df[ma].iloc[-1] > temp_df['Close'].iloc[-1]):
+                   daily_scores += -1 
+                elif(temp_df[ma].iloc[-1] < temp_df['Close'].iloc[-1]):
+                    daily_scores += 1
+            temp_df.drop(temp_df.tail(1).index,inplace = True)
+            cut += 1
+            it_date = temp_df.loc[temp_df.index[-1]]["Date"].date()
+    except Exception:
+        print(f"Problem was accured during scoring MA daily, Details: \n {traceback.format_exc()}")
+        daily_properties = 0
+        daily_scores = 0
 
 def ma_score_weekly(market_1wk):
     global weekly_scores, weekly_properties
-    moving_averages = ['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30','SMA50','EMA50','SMA100','EMA100','SMA200','EMA200']
-    for ma in moving_averages:
-        weekly_properties +=1
-        if(market_1wk[ma].iloc[-1] > market_1wk['Close'].iloc[-1]):
-           weekly_scores += -1 
-        elif(market_1wk[ma].iloc[-1] < market_1wk['Close'].iloc[-1]):
-            weekly_scores += 1
+    try:
+        moving_averages = ['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30','SMA50','EMA50','SMA100','EMA100','SMA200','EMA200']
+        for ma in moving_averages:
+            weekly_properties +=1
+            if(market_1wk[ma].iloc[-1] > market_1wk['Close'].iloc[-1]):
+               weekly_scores += -1 
+            elif(market_1wk[ma].iloc[-1] < market_1wk['Close'].iloc[-1]):
+                weekly_scores += 1
+    except Exception:
+        print(f"Problem was accured during scoring MA weekly, Details: \n {traceback.format_exc()}")
+        weekly_properties = 0
+        weekly_scores = 0
+
 
 def ma_score_monthly(market_1mo):
     global monthly_scores, monthly_properties
-    moving_averages = ['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30','SMA50','EMA50','SMA100','EMA100','SMA200','EMA200']
-    for ma in moving_averages:
-        monthly_properties +=1
-        if(market_1mo[ma].iloc[-1] > market_1mo['Close'].iloc[-1]):
-            monthly_scores += -1 
-        elif(market_1mo[ma].iloc[-1] < market_1mo['Close'].iloc[-1]):
-            monthly_scores += 1
+    try:
+        moving_averages = ['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30','SMA50','EMA50','SMA100','EMA100','SMA200','EMA200']
+        for ma in moving_averages:
+            monthly_properties +=1
+            if(market_1mo[ma].iloc[-1] > market_1mo['Close'].iloc[-1]):
+                monthly_scores += -1 
+            elif(market_1mo[ma].iloc[-1] < market_1mo['Close'].iloc[-1]):
+                monthly_scores += 1
+    except Exception:
+        print(f"Problem was accured during scoring MA monthly, Details: \n {traceback.format_exc()}")
 
 
 def oscillators_score_daily(market_1d, market_1wk, market_1mo):
     global daily_properties
-    it_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
-    start_week_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
-    start_next_week_date = start_week_date + timedelta(days=7)
-    temp_df = market_1d.copy(deep=True)
-    while(start_next_week_date > it_date >= start_week_date):
-        rsi_sentiment_daily(temp_df, market_1wk, market_1mo)
-        stochastic_sentiment_daily(temp_df)
-        cci_sentiment_daily(temp_df)
-        adx_sentiment_daily(temp_df)
-        aws_sentiment_daily(temp_df)
-        mom_sentiment_daily(temp_df,market_1wk, market_1mo)
-        macd_sentiment_daily(temp_df)
-        stochrsi_sentiment_daily(temp_df,market_1wk, market_1mo)
-        williams_sentiment_daily(temp_df,market_1wk, market_1mo)
-        ultimate_sentiment_daily(temp_df)
-        daily_properties += 10
-        temp_df.drop(temp_df.tail(1).index,inplace = True)
-        it_date = temp_df.loc[temp_df.index[-1]]["Date"].date()
+    try:
+        it_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
+        start_week_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+        start_next_week_date = start_week_date + timedelta(days=7)
+        temp_df = market_1d.copy(deep=True)
+        while(start_next_week_date > it_date >= start_week_date):
+            rsi_sentiment_daily(temp_df, market_1wk, market_1mo)
+            stochastic_sentiment_daily(temp_df)
+            cci_sentiment_daily(temp_df)
+            adx_sentiment_daily(temp_df)
+            aws_sentiment_daily(temp_df)
+            mom_sentiment_daily(temp_df,market_1wk, market_1mo)
+            macd_sentiment_daily(temp_df)
+            stochrsi_sentiment_daily(temp_df,market_1wk, market_1mo)
+            williams_sentiment_daily(temp_df,market_1wk, market_1mo)
+            ultimate_sentiment_daily(temp_df)
+            daily_properties += 10
+            temp_df.drop(temp_df.tail(1).index,inplace = True)
+            it_date = temp_df.loc[temp_df.index[-1]]["Date"].date()
+    except Exception:
+        print(f"Problem was accured during scoring OSCILATORS daily, Details: \n {traceback.format_exc()}")
 
 
 def oscillators_score_weekly(market_1d, market_1wk, market_1mo):
@@ -317,18 +333,6 @@ def oscillators_score_monthly(market_1d, market_1wk, market_1mo):
     williams_sentiment_monthly(market_1d,market_1wk, market_1mo)
     ultimate_sentiment_monthly(market_1mo)
     monthly_properties += 10
-
-# def oscillators_score(self,market_1d, market_1wk, market_1mo,market):
-#     rsi_sentiment_daily(market_1d)
-#     stochastic_sentiment_daily(market_1d)
-#     cci_sentiment(self,market_1d, market_1wk, market_1mo)
-#     adx_sentiment(self,market_1d, market_1wk, market_1mo)
-#     aws_sentiment(self,market_1d, market_1wk, market_1mo)
-#     mom_sentiment(self,market_1d, market_1wk, market_1mo)
-#     macd_sentiment(self,market_1d, market_1wk, market_1mo)
-#     stochrsi_sentiment(self,market_1d, market_1wk, market_1mo)
-#     williams_sentiment(self,market_1d, market_1wk, market_1mo)
-#     ultimate_sentiment(self,market_1d, market_1wk, market_1mo)
 
 def rsi_sentiment_daily(market_1d, market_1wk, market_1mo):
     global daily_scores
@@ -492,7 +496,6 @@ def stochrsi_sentiment_daily(market_1d, market_1wk, market_1mo):
         and market_1d["STOCHRSI_K"].iloc[-1] > market_1d["STOCHRSI_D"].iloc[-1]):
         daily_scores += 1
 
-
 def stochrsi_sentiment_weekly(market_1d, market_1wk, market_1mo):
     global weekly_scores
     if(trend_estimate(market_1d, market_1wk, market_1mo,"STOCHRSI_K",'1wk') > 0 and market_1wk["STOCHRSI_K"].iloc[-1] > 80 and market_1wk["STOCHRSI_D"].iloc[-1] > 80
@@ -510,7 +513,6 @@ def stochrsi_sentiment_monthly(market_1d, market_1wk, market_1mo):
     elif(trend_estimate(market_1d, market_1wk, market_1mo,"STOCHRSI_K",'1mo') < 0 and market_1mo["STOCHRSI_K"].iloc[-1] < 20 and market_1mo["STOCHRSI_D"].iloc[-1] < 20
         and market_1mo["STOCHRSI_K"].iloc[-1] > market_1mo["STOCHRSI_D"].iloc[-1]):
         monthly_scores += 1
-
 
 def williams_sentiment_daily(market_1d, market_1wk, market_1mo):
     global daily_scores
@@ -582,8 +584,6 @@ def trend_estimate(market_1d, market_1wk, market_1mo,oscillator, interval):
 def round_date_mo(df):
     last_date_mo = df.loc[df.index[-1]]["Date"].date()
     second_date_mo = df.loc[df.index[-2]]["Date"].date()
-    # last_date_mo = datetime.strptime(last_date_mo, "%Y-%m-%d").date()
-    # second_date_mo = datetime.strptime(second_date_mo, "%Y-%m-%d").date()
     if((second_date_mo + relativedelta(months=1)) == last_date_mo):
         return
     df.drop(df.tail(1).index,inplace = True)
@@ -592,13 +592,10 @@ def round_date_mo(df):
 def round_date_wk(df):
     last_date_wk = df.loc[df.index[-1]]["Date"].date()
     second_date_wk = df.loc[df.index[-2]]["Date"].date()
-    # last_date_wk = datetime.strptime(last_date_wk, "%Y-%m-%d").date()
-    # second_date_wk = datetime.strptime(second_date_wk, "%Y-%m-%d").date()
     if((second_date_wk + timedelta(days=7)) == last_date_wk):
         return
     df.drop(df.tail(1).index,inplace = True)
     return 
-
 
 
 def clean_content(content):
@@ -633,109 +630,114 @@ def score_num(score):
 
 
 def moving_averages_extract_data(market_1d, market_1wk, market_1mo):
+    try:
+        market_1d['SMA10'] = ta.SMA(market_1d['Close'], timeperiod=10)
+        market_1d['EMA10'] = ta.EMA(market_1d['Close'], timeperiod=10)
+        market_1wk['SMA10'] = ta.SMA(market_1wk['Close'], timeperiod=10)
+        market_1wk['EMA10'] = ta.EMA(market_1wk['Close'], timeperiod=10)
+        market_1mo['SMA10'] = ta.SMA(market_1mo['Close'], timeperiod=10)
+        market_1mo['EMA10'] = ta.EMA(market_1mo['Close'], timeperiod=10)
 
-    market_1d['SMA10'] = ta.SMA(market_1d['Close'], timeperiod=10)
-    market_1d['EMA10'] = ta.EMA(market_1d['Close'], timeperiod=10)
-    market_1wk['SMA10'] = ta.SMA(market_1wk['Close'], timeperiod=10)
-    market_1wk['EMA10'] = ta.EMA(market_1wk['Close'], timeperiod=10)
-    market_1mo['SMA10'] = ta.SMA(market_1mo['Close'], timeperiod=10)
-    market_1mo['EMA10'] = ta.EMA(market_1mo['Close'], timeperiod=10)
+        market_1d['SMA20'] = ta.SMA(market_1d['Close'], timeperiod=20)
+        market_1d['EMA20'] = ta.EMA(market_1d['Close'], timeperiod=20)
+        market_1wk['SMA20'] = ta.SMA(market_1wk['Close'], timeperiod=20)
+        market_1wk['EMA20'] = ta.EMA(market_1wk['Close'], timeperiod=20)
+        market_1mo['SMA20'] = ta.SMA(market_1mo['Close'], timeperiod=20)
+        market_1mo['EMA20'] = ta.EMA(market_1mo['Close'], timeperiod=20)
 
-    market_1d['SMA20'] = ta.SMA(market_1d['Close'], timeperiod=20)
-    market_1d['EMA20'] = ta.EMA(market_1d['Close'], timeperiod=20)
-    market_1wk['SMA20'] = ta.SMA(market_1wk['Close'], timeperiod=20)
-    market_1wk['EMA20'] = ta.EMA(market_1wk['Close'], timeperiod=20)
-    market_1mo['SMA20'] = ta.SMA(market_1mo['Close'], timeperiod=20)
-    market_1mo['EMA20'] = ta.EMA(market_1mo['Close'], timeperiod=20)
+        market_1d['SMA30'] = ta.SMA(market_1d['Close'], timeperiod=30)
+        market_1d['EMA30'] = ta.EMA(market_1d['Close'], timeperiod=30)
+        market_1wk['SMA30'] = ta.SMA(market_1wk['Close'], timeperiod=30)
+        market_1wk['EMA30'] = ta.EMA(market_1wk['Close'], timeperiod=30)
+        market_1mo['SMA30'] = ta.SMA(market_1mo['Close'], timeperiod=30)
+        market_1mo['EMA30'] = ta.EMA(market_1mo['Close'], timeperiod=30)
 
-    market_1d['SMA30'] = ta.SMA(market_1d['Close'], timeperiod=30)
-    market_1d['EMA30'] = ta.EMA(market_1d['Close'], timeperiod=30)
-    market_1wk['SMA30'] = ta.SMA(market_1wk['Close'], timeperiod=30)
-    market_1wk['EMA30'] = ta.EMA(market_1wk['Close'], timeperiod=30)
-    market_1mo['SMA30'] = ta.SMA(market_1mo['Close'], timeperiod=30)
-    market_1mo['EMA30'] = ta.EMA(market_1mo['Close'], timeperiod=30)
-    
-    market_1d['SMA50'] = ta.SMA(market_1d['Close'], timeperiod=50)
-    market_1d['EMA50'] = ta.EMA(market_1d['Close'], timeperiod=50)
-    market_1wk['SMA50'] = ta.SMA(market_1wk['Close'], timeperiod=50)
-    market_1wk['EMA50'] = ta.EMA(market_1wk['Close'], timeperiod=50)
-    market_1mo['SMA50'] = ta.SMA(market_1mo['Close'], timeperiod=50)
-    market_1mo['EMA50'] = ta.EMA(market_1mo['Close'], timeperiod=50)
+        market_1d['SMA50'] = ta.SMA(market_1d['Close'], timeperiod=50)
+        market_1d['EMA50'] = ta.EMA(market_1d['Close'], timeperiod=50)
+        market_1wk['SMA50'] = ta.SMA(market_1wk['Close'], timeperiod=50)
+        market_1wk['EMA50'] = ta.EMA(market_1wk['Close'], timeperiod=50)
+        market_1mo['SMA50'] = ta.SMA(market_1mo['Close'], timeperiod=50)
+        market_1mo['EMA50'] = ta.EMA(market_1mo['Close'], timeperiod=50)
 
-    market_1d['SMA100'] = ta.SMA(market_1d['Close'], timeperiod=100)
-    market_1d['EMA100'] = ta.EMA(market_1d['Close'], timeperiod=100)
-    market_1wk['SMA100'] = ta.SMA(market_1wk['Close'], timeperiod=100)
-    market_1wk['EMA100'] = ta.EMA(market_1wk['Close'], timeperiod=100)
-    market_1mo['SMA100'] = ta.SMA(market_1mo['Close'], timeperiod=100)
-    market_1mo['EMA100'] = ta.EMA(market_1mo['Close'], timeperiod=100)
+        market_1d['SMA100'] = ta.SMA(market_1d['Close'], timeperiod=100)
+        market_1d['EMA100'] = ta.EMA(market_1d['Close'], timeperiod=100)
+        market_1wk['SMA100'] = ta.SMA(market_1wk['Close'], timeperiod=100)
+        market_1wk['EMA100'] = ta.EMA(market_1wk['Close'], timeperiod=100)
+        market_1mo['SMA100'] = ta.SMA(market_1mo['Close'], timeperiod=100)
+        market_1mo['EMA100'] = ta.EMA(market_1mo['Close'], timeperiod=100)
 
-    market_1d['SMA200'] = ta.SMA(market_1d['Close'], timeperiod=200)
-    market_1d['EMA200'] = ta.EMA(market_1d['Close'], timeperiod=200)
-    market_1wk['SMA200'] = ta.SMA(market_1wk['Close'], timeperiod=200)
-    market_1wk['EMA200'] = ta.EMA(market_1wk['Close'], timeperiod=200)
-    market_1mo['SMA200'] = ta.SMA(market_1mo['Close'], timeperiod=200)
-    market_1mo['EMA200'] = ta.EMA(market_1mo['Close'], timeperiod=200)
+        market_1d['SMA200'] = ta.SMA(market_1d['Close'], timeperiod=200)
+        market_1d['EMA200'] = ta.EMA(market_1d['Close'], timeperiod=200)
+        market_1wk['SMA200'] = ta.SMA(market_1wk['Close'], timeperiod=200)
+        market_1wk['EMA200'] = ta.EMA(market_1wk['Close'], timeperiod=200)
+        market_1mo['SMA200'] = ta.SMA(market_1mo['Close'], timeperiod=200)
+        market_1mo['EMA200'] = ta.EMA(market_1mo['Close'], timeperiod=200)
+    except Exception:
+        print(f"Problem was accured during extract MA data, Details: \n {traceback.format_exc()}")
 
 def oscillators_extract_data(market_1d, market_1wk, market_1mo):
-    market_1d['RSI'] = RSIIndicator(market_1d['Close']).rsi()
-    market_1wk['RSI'] = RSIIndicator(market_1wk['Close']).rsi()
-    market_1mo['RSI'] = RSIIndicator(market_1mo['Close']).rsi()
+    try:
+        market_1d['RSI'] = RSIIndicator(market_1d['Close']).rsi()
+        market_1wk['RSI'] = RSIIndicator(market_1wk['Close']).rsi()
+        market_1mo['RSI'] = RSIIndicator(market_1mo['Close']).rsi()
 
-    market_1d['STOCH_S'] = StochasticOscillator(market_1d['High'],market_1d['Low'],market_1d['Close'], window=14,smooth_window=3).stoch_signal()
-    market_1wk['STOCH_S'] = StochasticOscillator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).stoch_signal()
-    market_1mo['STOCH_S'] = StochasticOscillator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).stoch_signal()
+        market_1d['STOCH_S'] = StochasticOscillator(market_1d['High'],market_1d['Low'],market_1d['Close'], window=14,smooth_window=3).stoch_signal()
+        market_1wk['STOCH_S'] = StochasticOscillator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).stoch_signal()
+        market_1mo['STOCH_S'] = StochasticOscillator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).stoch_signal()
 
-    market_1d['STOCH_M'] = SMAIndicator(market_1d['STOCH_S'],window=3).sma_indicator()
-    market_1wk['STOCH_M'] = SMAIndicator(market_1wk['STOCH_S'],window=3).sma_indicator()
-    market_1mo['STOCH_M'] = SMAIndicator(market_1mo['STOCH_S'],window=3).sma_indicator()
+        market_1d['STOCH_M'] = SMAIndicator(market_1d['STOCH_S'],window=3).sma_indicator()
+        market_1wk['STOCH_M'] = SMAIndicator(market_1wk['STOCH_S'],window=3).sma_indicator()
+        market_1mo['STOCH_M'] = SMAIndicator(market_1mo['STOCH_S'],window=3).sma_indicator()
 
-    market_1d['CCI'] = CCIIndicator(market_1d['High'],market_1d['Low'],market_1d['Close']).cci()
-    market_1wk['CCI'] = CCIIndicator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).cci()
-    market_1mo['CCI'] = CCIIndicator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).cci()
-    
-    market_1d['ADX'] = ADXIndicator(market_1d['High'],market_1d['Low'],market_1d['Close']).adx()
-    market_1wk['ADX'] = ADXIndicator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).adx()
-    market_1mo['ADX'] = ADXIndicator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).adx()
+        market_1d['CCI'] = CCIIndicator(market_1d['High'],market_1d['Low'],market_1d['Close']).cci()
+        market_1wk['CCI'] = CCIIndicator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).cci()
+        market_1mo['CCI'] = CCIIndicator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).cci()
 
-    market_1d['ADX_D+'] = ADXIndicator(market_1d['High'],market_1d['Low'],market_1d['Close']).adx_pos()
-    market_1wk['ADX_D+'] = ADXIndicator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).adx_pos()
-    market_1mo['ADX_D+'] = ADXIndicator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).adx_pos()
+        market_1d['ADX'] = ADXIndicator(market_1d['High'],market_1d['Low'],market_1d['Close']).adx()
+        market_1wk['ADX'] = ADXIndicator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).adx()
+        market_1mo['ADX'] = ADXIndicator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).adx()
 
-    market_1d['ADX_D-'] = ADXIndicator(market_1d['High'],market_1d['Low'],market_1d['Close']).adx_neg()
-    market_1wk['ADX_D-'] = ADXIndicator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).adx_neg()
-    market_1mo['ADX_D-'] = ADXIndicator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).adx_neg()
+        market_1d['ADX_D+'] = ADXIndicator(market_1d['High'],market_1d['Low'],market_1d['Close']).adx_pos()
+        market_1wk['ADX_D+'] = ADXIndicator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).adx_pos()
+        market_1mo['ADX_D+'] = ADXIndicator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).adx_pos()
 
-    market_1d['AWS'] = AwesomeOscillatorIndicator(market_1d['High'],market_1d['Low']).awesome_oscillator()
-    market_1wk['AWS'] = AwesomeOscillatorIndicator(market_1wk['High'],market_1wk['Low']).awesome_oscillator()
-    market_1mo['AWS'] = AwesomeOscillatorIndicator(market_1mo['High'],market_1mo['Low']).awesome_oscillator()
+        market_1d['ADX_D-'] = ADXIndicator(market_1d['High'],market_1d['Low'],market_1d['Close']).adx_neg()
+        market_1wk['ADX_D-'] = ADXIndicator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).adx_neg()
+        market_1mo['ADX_D-'] = ADXIndicator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).adx_neg()
 
-    market_1d['MOM'] = ta.MOM(market_1d['Close'], timeperiod=10)
-    market_1wk['MOM'] = ta.MOM(market_1wk['Close'], timeperiod=10)
-    market_1mo['MOM'] = ta.MOM(market_1mo['Close'], timeperiod=10)
+        market_1d['AWS'] = AwesomeOscillatorIndicator(market_1d['High'],market_1d['Low']).awesome_oscillator()
+        market_1wk['AWS'] = AwesomeOscillatorIndicator(market_1wk['High'],market_1wk['Low']).awesome_oscillator()
+        market_1mo['AWS'] = AwesomeOscillatorIndicator(market_1mo['High'],market_1mo['Low']).awesome_oscillator()
 
-    market_1d['MACD'] = MACD(market_1d['Close']).macd()
-    market_1wk['MACD'] = MACD(market_1wk['Close']).macd()
-    market_1mo['MACD'] = MACD(market_1mo['Close']).macd()
+        market_1d['MOM'] = ta.MOM(market_1d['Close'], timeperiod=10)
+        market_1wk['MOM'] = ta.MOM(market_1wk['Close'], timeperiod=10)
+        market_1mo['MOM'] = ta.MOM(market_1mo['Close'], timeperiod=10)
 
-    market_1d['MACD_S'] = MACD(market_1d['Close']).macd_signal()
-    market_1wk['MACD_S'] = MACD(market_1wk['Close']).macd_signal()
-    market_1mo['MACD_S'] = MACD(market_1mo['Close']).macd_signal()
-    
-    market_1d['STOCHRSI_K'] = StochRSIIndicator(market_1d['Close']).stochrsi_k()*100
-    market_1wk['STOCHRSI_K'] = StochRSIIndicator(market_1wk['Close']).stochrsi_k()*100
-    market_1mo['STOCHRSI_K'] = StochRSIIndicator(market_1mo['Close']).stochrsi_k()*100
+        market_1d['MACD'] = MACD(market_1d['Close']).macd()
+        market_1wk['MACD'] = MACD(market_1wk['Close']).macd()
+        market_1mo['MACD'] = MACD(market_1mo['Close']).macd()
 
-    market_1d['STOCHRSI_D'] = StochRSIIndicator(market_1d['Close']).stochrsi_d()*100
-    market_1wk['STOCHRSI_D'] = StochRSIIndicator(market_1wk['Close']).stochrsi_d()*100
-    market_1mo['STOCHRSI_D'] = StochRSIIndicator(market_1mo['Close']).stochrsi_d()*100
+        market_1d['MACD_S'] = MACD(market_1d['Close']).macd_signal()
+        market_1wk['MACD_S'] = MACD(market_1wk['Close']).macd_signal()
+        market_1mo['MACD_S'] = MACD(market_1mo['Close']).macd_signal()
 
-    market_1d['WILLIAM'] = WilliamsRIndicator(market_1d['High'],market_1d['Low'],market_1d['Close']).williams_r()
-    market_1wk['WILLIAM'] = WilliamsRIndicator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).williams_r()
-    market_1mo['WILLIAM'] = WilliamsRIndicator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).williams_r()
-    
-    market_1d['ULTIMATE'] = UltimateOscillator(market_1d['High'],market_1d['Low'],market_1d['Close']).ultimate_oscillator()
-    market_1wk['ULTIMATE'] = UltimateOscillator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).ultimate_oscillator()
-    market_1mo['ULTIMATE'] = UltimateOscillator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).ultimate_oscillator()
+        market_1d['STOCHRSI_K'] = StochRSIIndicator(market_1d['Close']).stochrsi_k()*100
+        market_1wk['STOCHRSI_K'] = StochRSIIndicator(market_1wk['Close']).stochrsi_k()*100
+        market_1mo['STOCHRSI_K'] = StochRSIIndicator(market_1mo['Close']).stochrsi_k()*100
+
+        market_1d['STOCHRSI_D'] = StochRSIIndicator(market_1d['Close']).stochrsi_d()*100
+        market_1wk['STOCHRSI_D'] = StochRSIIndicator(market_1wk['Close']).stochrsi_d()*100
+        market_1mo['STOCHRSI_D'] = StochRSIIndicator(market_1mo['Close']).stochrsi_d()*100
+
+        market_1d['WILLIAM'] = WilliamsRIndicator(market_1d['High'],market_1d['Low'],market_1d['Close']).williams_r()
+        market_1wk['WILLIAM'] = WilliamsRIndicator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).williams_r()
+        market_1mo['WILLIAM'] = WilliamsRIndicator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).williams_r()
+
+        market_1d['ULTIMATE'] = UltimateOscillator(market_1d['High'],market_1d['Low'],market_1d['Close']).ultimate_oscillator()
+        market_1wk['ULTIMATE'] = UltimateOscillator(market_1wk['High'],market_1wk['Low'],market_1wk['Close']).ultimate_oscillator()
+        market_1mo['ULTIMATE'] = UltimateOscillator(market_1mo['High'],market_1mo['Low'],market_1mo['Close']).ultimate_oscillator()
+    except Exception:
+        print(f"Problem was accured during extract OSCILLATORS data, Details: \n {traceback.format_exc()}")
 
 
 def articles_week_analyzer(articles, date):
@@ -841,9 +843,11 @@ def run_market_news_processor(start_date, stop_date):
     if not results_path.exists():
         results_path.mkdir(parents=True)
     news_data = get_news_dict(start_date, stop_date)
-    market_news_sentiment_df = news_extractor(news_data, start_date)       
-    market_news_sentiment_df.to_csv(results_path / f"market_news_sentiment_{date}.csv")
-
+    market_news_sentiment_df = news_extractor(news_data, start_date)
+    try:       
+        market_news_sentiment_df.to_csv(results_path / f"market_news_sentiment_{date}.csv")
+    except Exception:
+        print(f"Problem was accured while tried to save csv file, Details: \n {traceback.format_exc()}")
 
 def news_extractor(news_data, date):
     global news_score
@@ -852,23 +856,29 @@ def news_extractor(news_data, date):
     new_row = {}
     counter = 1
     for key, new in news_data.items():
-        title = new['attributes']['title']
-        date_time = new['attributes']['publishOn']
-        content = new['attributes']['content']
-        url = new['links']['canonical']
-        url = str(url).replace('"',"")
-        content = clean_content(content)
-        score = sentiment_score(content)
-        news_score += score
-        new_row['HeadLine'] = title
-        new_row['Sentiment'] = score
-        new_row['Date'] = date_time
-        new_row["URL"] = url
-        market_news_sentiment_df = market_news_sentiment_df.append(new_row, ignore_index=True)
-        stocks_news_dict.clear()
-        new_row.clear()
-        print(f'Finish analyse {counter} news at week {date} | TOTAL RUN TIME: {round((time.time() - start_run_time)/60, 2)} minutes')
-        counter += 1
+        try:
+            title = new['attributes']['title']
+            date_time = new['attributes']['publishOn']
+            content = new['attributes']['content']
+            url = new['links']['canonical']
+            url = str(url).replace('"',"")
+            content = clean_content(content)
+            score = sentiment_score(content)
+            news_score += score
+            new_row['HeadLine'] = title
+            new_row['Sentiment'] = score
+            new_row['Date'] = date_time
+            new_row["URL"] = url
+            market_news_sentiment_df = market_news_sentiment_df.append(new_row, ignore_index=True)
+            stocks_news_dict.clear()
+            new_row.clear()
+            print(f'Finish analyse {counter} news at week {date} | TOTAL RUN TIME: {round((time.time() - start_run_time)/60, 2)} minutes')
+            counter += 1
+        except Exception as e:
+            print(f"f'Problem accured in NEW No.{counter}, Error details: {e}")
+            stocks_news_dict.clear()
+            new_row.clear()
+            counter += 1
     return market_news_sentiment_df
 
 
