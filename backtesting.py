@@ -78,7 +78,7 @@ class BackTesting:
         market_1d, market_1wk, market_1mo = download_symbol_data('spy')
         market_1d, market_1wk, market_1mo = clean_df_nans(market_1d, market_1wk, market_1mo)
         add_technical_data(market_1d, market_1wk, market_1mo)
-        run_back_testing(self,market_1d, market_1wk, market_1mo)
+        run_back_testing(self,market_1d, market_1wk, market_1mo,results_path)
         self.market_df.to_csv(results_path / f"final_sentiment_spy.csv")
         print(f'TOTAL RUN TIME WAS: {time.time() - start_run_time}')
         # total_scores = 0
@@ -136,7 +136,7 @@ def add_technical_data(market_1d, market_1wk, market_1mo):
     #     market_1d.drop(market_1d.tail(1).index,inplace = True)
     #     date_1d = market_1d.loc[market_1d.index[-1]]["Date"].date() 
 
-def run_back_testing(self,market_1d, market_1wk, market_1mo):
+def run_back_testing(self,market_1d, market_1wk, market_1mo,results_path):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
     global cut, index, articles_score, articles_properties, news_score, news_properties
     try:
@@ -162,12 +162,6 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         run_market_news_processor(start_date, stop_date)
         run_articles_news_processor(start_date, stop_date)
 
-        market_1d.drop(market_1d.tail(cut).index,inplace = True)
-        market_1wk.drop(market_1wk.tail(1).index,inplace = True)
-        current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
-        start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
-        stop_date = current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
-
         total_scores = daily_scores + weekly_scores + monthly_scores + articles_score + news_score
         total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties + news_properties
 
@@ -178,6 +172,12 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         self.market_df.loc[index, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
         self.market_df.loc[index, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
         self.market_df.loc[index, 'Date'] = current_date
+
+        market_1d.drop(market_1d.tail(cut).index,inplace = True)
+        market_1wk.drop(market_1wk.tail(1).index,inplace = True)
+        current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+        start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
+        stop_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
         total_scores = 0
         total_properties = 0
         daily_scores = 0
@@ -190,6 +190,7 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         news_properties = 0
         cut = 0
         index += 1
+        self.market_df.to_csv(results_path / f"final_sentiment_spy.csv")
     
 
 def technical_score_adaptation(self,market):
