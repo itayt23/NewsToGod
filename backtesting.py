@@ -828,7 +828,7 @@ def articles_sentiment(start_date, stop_date):
                 date = date.replace('T'," ")
                 date =  date[:-6]
                 date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
-                if(stop_date == date_t.date()) : stop = True
+                if(stop_date >= date_t.date()) : stop = True
                 elif(stop == False):
                     articles.append(article['id'])
                     articles_properties += 1
@@ -903,7 +903,7 @@ def get_news_dict(start_date, stop_date):
                 date = date.replace('T'," ")
                 date =  date[:-6]
                 date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
-                if(stop_date == date_t.date()) : stop = True
+                if(stop_date >= date_t.date()) : stop = True
                 elif(stop == False):
                     news[date] = new
                     news_properties += 1
