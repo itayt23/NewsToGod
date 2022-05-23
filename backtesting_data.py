@@ -66,16 +66,32 @@ class BackTestingData:
     def __init__(self):
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
         global index
-        results_path = Path.cwd() / 'Results' / 'BackTesting' 
+        results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Corona'
         if not results_path.exists():
             results_path.mkdir(parents=True)
         self.market_df = pd.DataFrame(columns=['News Sentiment','Article Sentiment','Technical Score daily',
-            'Technical Score weekly','Technical Score monthly','Final Score','Date'])
+            'Technical Score weekly','Technical Score monthly','Final Score','Date', 'HIT'])
+        self.weights_df = pd.DataFrame(columns=["Technical Weight", "Monthly Weight", "News Weight", "Articles Weight", "Score"])
         market_1d = pd.read_csv("market_1d.csv")
         market_1wk = pd.read_csv("market_1wk.csv")
         market_1mo = pd.read_csv("market_1mo.csv")
-        run_back_testing(self,market_1d, market_1wk, market_1mo,results_path)
-        self.market_df.to_csv(results_path / f"final_sentiment_spy_1x1x2x_x3mo.csv")
+        self.technical_weight = 0.25
+        self.monthly_weight = 0.25
+        self.news_weight = 0.25
+        self.articles_weight = 0.25
+        for i in range(10):
+            run_back_testing(self,market_1d, market_1wk, market_1mo)
+            self.weights_df.loc[i, "Technical Weight"] = self.technical_weight
+            self.weights_df.loc[i, "Monthly Weight"] = self.monthly_weight
+            self.weights_df.loc[i, "News Weight"] = self.news_weight
+            self.weights_df.loc[i, "Articles Weight"] = self.articles_weight
+            self.weights_df.loc[i, "Score"] =  self.market_df['HIT'].sum()
+
+            self.technical_weight = 0.1
+            self.monthly_weight = 0.3
+            self.news_weight = 0.1
+            self.articles_weight = 0.5
+            self.weights_df.to_csv(results_path / f"weights check.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)}')
         # total_scores = 0
         # total_properties = 0
@@ -127,21 +143,21 @@ def add_technical_data(market_1d, market_1wk, market_1mo):
     round_date_wk(market_1wk)
     round_date_mo(market_1mo)
 
-def run_back_testing(self,market_1d, market_1wk, market_1mo,results_path):
+def run_back_testing(self,market_1d, market_1wk, market_1mo):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
     global cut, index, articles_score, articles_properties, news_score, news_properties
     iterator = 0
-    technical_weight = 0.3
-    monthly_weight = 0.3
-    news_weight = 0.1
-    articles_weight = 0.3
+    hit = 0
+    # technical_weight = 0.3
+    # monthly_weight = 0.3
+    # news_weight = 0.1
+    # articles_weight = 0.3
     try:
         path_articels = Path.cwd() / 'Results' / 'BackTesting' / 'Articles Sentiment'    
         path_news = Path.cwd() / 'Results' / 'BackTesting' / 'News Sentiment'    
         news_files = glob.glob(str(path_news) + "\*.csv")
         articles_files = glob.glob(str(path_articels) + "\*.csv")
         articles_files.reverse()
-        start_date = datetime.strptime(market_1d.loc[market_1d.index[-1]]["Date"],"%Y-%m-%d").date()
         current_date = datetime.strptime(market_1wk.loc[market_1wk.index[-1]]["Date"],"%Y-%m-%d").date()
         month =  datetime.strptime(market_1mo.loc[market_1mo.index[-1]]["Date"], "%Y-%m-%d").date().month
         end_date = datetime.strptime("2021-01-01", "%Y-%m-%d").date()
@@ -173,9 +189,19 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo,results_path):
         # total_scores = (daily_scores + weekly_scores + monthly_scores*4)*technical_weight + articles_score*articles_weight + news_score*news_weight
         # total_properties = (daily_properties + weekly_properties + monthly_properties*4)*technical_weight + articles_properties*articles_weight + news_properties*news_weight
 
-        total_scores = (daily_scores + weekly_scores)*technical_weight + monthly_scores*monthly_weight + articles_score*articles_weight + news_score*news_weight
-        total_properties = (daily_properties + weekly_properties)*technical_weight + monthly_properties*monthly_weight+ articles_properties*articles_weight + news_properties*news_weight
+        total_scores = (daily_scores + weekly_scores)*self.technical_weight + monthly_scores*self.monthly_weight + articles_score*self.articles_weight + news_score*self.news_weight
+        total_properties = (daily_properties + weekly_properties)*self.technical_weight + monthly_properties*self.monthly_weight+ articles_properties*self.articles_weight + news_properties*self.news_weight
 
+        if(index != 0):
+            sentiment = score_to_sentiment(total_scores/total_properties)
+            current_price = float(market_1wk.loc[market_1wk.index[-1]]["Close"])
+            if(sentiment == 'Sell'):
+                if(current_price >= target_price): hit = 1
+                else: hit = -1
+            elif(sentiment == 'Buy'):
+                if(current_price <= target_price): hit = 1
+                else: hit = -1
+            else: hit = 0
 
         self.market_df.loc[index, 'News Sentiment'] = score_to_sentiment(news_score/news_properties)
         self.market_df.loc[index, 'Article Sentiment'] = score_to_sentiment(articles_score/articles_properties)
@@ -184,12 +210,12 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo,results_path):
         self.market_df.loc[index, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
         self.market_df.loc[index, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
         self.market_df.loc[index, 'Date'] = current_date
+        self.market_df.loc[index, 'HIT'] = hit
 
+        target_price = float(market_1wk.loc[market_1wk.index[-1]]["Close"])
         market_1d.drop(market_1d.tail(cut).index,inplace = True)
         market_1wk.drop(market_1wk.tail(1).index,inplace = True)
         current_date =  datetime.strptime(market_1wk.loc[market_1wk.index[-1]]["Date"],"%Y-%m-%d").date()
-        start_date =  datetime.strptime(market_1d.loc[market_1d.index[-1]]["Date"],"%Y-%m-%d").date()
-        stop_date =  datetime.strptime(market_1wk.loc[market_1wk.index[-1]]["Date"],"%Y-%m-%d").date() - timedelta(days=3)
         total_scores = 0
         total_properties = 0
         daily_scores = 0
