@@ -25,6 +25,7 @@ from ta.volume import *
 import pymannkendall as mk
 import traceback
 import glob
+import numpy as np, numpy.random
 
 
 # market_1d.to_csv("market_1d.csv")
@@ -66,7 +67,7 @@ class BackTestingData:
     def __init__(self):
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
         global index
-        results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Corona'
+        results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Weights'
         if not results_path.exists():
             results_path.mkdir(parents=True)
         self.market_df = pd.DataFrame(columns=['News Sentiment','Article Sentiment','Technical Score daily',
@@ -75,23 +76,34 @@ class BackTestingData:
         market_1d = pd.read_csv("market_1d.csv")
         market_1wk = pd.read_csv("market_1wk.csv")
         market_1mo = pd.read_csv("market_1mo.csv")
-        self.technical_weight = 0.25
-        self.monthly_weight = 0.25
-        self.news_weight = 0.25
-        self.articles_weight = 0.25
-        for i in range(10):
+        self.technical_weight = 0.03
+        self.monthly_weight = 0.17
+        self.news_weight = 0.2
+        self.articles_weight = 0.6
+        for i in range(1000):
             run_back_testing(self,market_1d, market_1wk, market_1mo)
             self.weights_df.loc[i, "Technical Weight"] = self.technical_weight
             self.weights_df.loc[i, "Monthly Weight"] = self.monthly_weight
             self.weights_df.loc[i, "News Weight"] = self.news_weight
             self.weights_df.loc[i, "Articles Weight"] = self.articles_weight
             self.weights_df.loc[i, "Score"] =  self.market_df['HIT'].sum()
-
-            self.technical_weight = 0.1
-            self.monthly_weight = 0.3
-            self.news_weight = 0.1
-            self.articles_weight = 0.5
-            self.weights_df.to_csv(results_path / f"weights check.csv")
+            rand_weights = np.random.dirichlet(np.ones(4),size=1)
+            self.technical_weight = rand_weights[0][0]
+            self.news_weight = rand_weights[0][1]
+            self.monthly_weight = rand_weights[0][2]
+            self.articles_weight = rand_weights[0][3]
+            while(self.monthly_weight < 0.7):
+                rand_weights = np.random.dirichlet(np.ones(4),size=1)
+                self.technical_weight = rand_weights[0][0]
+                self.news_weight = rand_weights[0][1]
+                self.monthly_weight = rand_weights[0][2]
+                self.articles_weight = rand_weights[0][3]
+            market_1d = pd.read_csv("market_1d.csv")
+            market_1wk = pd.read_csv("market_1wk.csv")
+            market_1mo = pd.read_csv("market_1mo.csv")
+            index = 0
+            print(f"finish {i+1} Random Weights")
+        self.weights_df.to_csv(results_path / f"weights check_large_monthlyFOcus2.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)}')
         # total_scores = 0
         # total_properties = 0
@@ -148,10 +160,7 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
     global cut, index, articles_score, articles_properties, news_score, news_properties
     iterator = 0
     hit = 0
-    # technical_weight = 0.3
-    # monthly_weight = 0.3
-    # news_weight = 0.1
-    # articles_weight = 0.3
+    results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Weights'
     try:
         path_articels = Path.cwd() / 'Results' / 'BackTesting' / 'Articles Sentiment'    
         path_news = Path.cwd() / 'Results' / 'BackTesting' / 'News Sentiment'    
@@ -164,7 +173,11 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
     except Exception as e:
         print(f"Problem was acuured during getting last date, Details: \n {traceback.format_exc()}")
     while (current_date > end_date):
-        print(f"finish week: {iterator}")
+        # print(f"finish week: {iterator}")
+        self.technical_weight = 0.03
+        self.monthly_weight = 0.15
+        self.news_weight = 0.32
+        self.articles_weight = 0.5
         ma_score_daily(market_1d,market_1wk)
         oscillators_score_daily(market_1d, market_1wk, market_1mo)
         ma_score_weekly(market_1wk)
@@ -188,17 +201,21 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
 
         # total_scores = (daily_scores + weekly_scores + monthly_scores*4)*technical_weight + articles_score*articles_weight + news_score*news_weight
         # total_properties = (daily_properties + weekly_properties + monthly_properties*4)*technical_weight + articles_properties*articles_weight + news_properties*news_weight
-
+        if(score_to_sentiment(articles_score/articles_properties) == "Netural"):
+            self.technical_weight = 0.07
+            self.monthly_weight = 0.76
+            self.news_weight = 0.13
+            self.articles_weight = 0.04
         total_scores = (daily_scores + weekly_scores)*self.technical_weight + monthly_scores*self.monthly_weight + articles_score*self.articles_weight + news_score*self.news_weight
         total_properties = (daily_properties + weekly_properties)*self.technical_weight + monthly_properties*self.monthly_weight+ articles_properties*self.articles_weight + news_properties*self.news_weight
 
         if(index != 0):
             sentiment = score_to_sentiment(total_scores/total_properties)
             current_price = float(market_1wk.loc[market_1wk.index[-1]]["Close"])
-            if(sentiment == 'Sell'):
+            if(sentiment == 'Sell' or sentiment == "Strong Sell"):
                 if(current_price >= target_price): hit = 1
                 else: hit = -1
-            elif(sentiment == 'Buy'):
+            elif(sentiment == 'Buy' or sentiment == "Strong Buy"):
                 if(current_price <= target_price): hit = 1
                 else: hit = -1
             else: hit = 0
@@ -229,6 +246,7 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         cut = 0
         index += 1
         iterator += 1
+    self.market_df.to_csv(results_path / f"weights details_{index}.csv")
     
 
 def technical_score_adaptation(self,market):
@@ -960,6 +978,8 @@ def concat_stocks(stocks_news_dict):
         else:
             stocks = stocks +", "+ value
     return stocks
+
+
 
 
 BackTestingData()
