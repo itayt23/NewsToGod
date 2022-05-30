@@ -8,8 +8,8 @@ import json
 from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta, date
-from dateutil.relativedelta import relativedelta
 import time
+from dateutil.relativedelta import relativedelta
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 from pathlib import Path

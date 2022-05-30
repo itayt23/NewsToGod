@@ -1,16 +1,30 @@
 from ctypes import sizeof
+from tracemalloc import stop
 import requests
 import json
 import yfinance as yf
 import pandas as pd
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
-from datetime import datetime
+from datetime import date,datetime,timedelta
+import time
 from pathlib import Path
 from dotenv import load_dotenv
 import os
 import matplotlib.pyplot as plt
 import seaborn as sns
+from concurrent.futures import ThreadPoolExecutor
+
+
+load_dotenv("api.env")
+tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+# url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
+headers = {
+ "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
+ "X-RapidAPI-Key": os.getenv('sa_api_key')
+}
+
 
 
 class SentimentProcessor:
@@ -58,8 +72,26 @@ class SentimentProcessor:
         del self.market_news_sentiment_df['Industery']
         del self.market_news_sentiment_df['Change']        
         self.market_news_sentiment_df.to_csv(results_path / f"market_news_sentiment_{date}.csv")
+    
 
-    def run_market_articles_processor(self):
+    
+    def run_articles_news_processor(self, start_date, stop_date):
+        articles = {}
+        articles_id = articles_sentiment(start_date, stop_date)
+        count = 0
+        with ThreadPoolExecutor(max_workers=6) as executor:
+            all_articles = executor.map(get_all_articles, articles_id)
+            executor.shutdown(wait=True)
+        for article in all_articles:
+            articles[count] = article
+            count += 1
+        self.articles_week_analyzer(articles,start_date)
+
+
+    def run_market_articles_processor_old(self):
+        today = date.today()
+        start_week = today - timedelta(days=today.weekday())
+        stop_date = start_week - timedelta(days=3)
         articles = []
         new_row = {}
         counter = 1 
@@ -70,12 +102,8 @@ class SentimentProcessor:
             results_path.mkdir(parents=True)
 
         url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
-        headers = {
-         "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
-         "X-RapidAPI-Key": os.getenv('sa_api_key')
-        }
         for page in range(0,5):
-            querystring = {"until":"0","since":"0","size":"2","number":page,"category":"market-outlook"}
+            querystring = {"until":"0","since":"0","size":"40","number":page,"category":"market-outlook"}
 
             articels_list = requests.request("GET", url, headers=headers, params=querystring)
             articels_list = json.loads(articels_list.text)
@@ -191,6 +219,48 @@ class SentimentProcessor:
             print("Error occured while trying to plotting news analysis...")
 
 
+    def articles_week_analyzer(self, articles, date):
+        global articles_score
+        counter = 1
+        sum = 0
+        market_articles_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
+        results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Articles Sentiment'
+        if not results_path.exists():
+            results_path.mkdir(parents=True)
+        new_row ={}
+        for article in articles.values():
+            try:
+                article_url = article['data']['links']['canonical']
+                article = article['data']['attributes']
+                article_title = article['title']
+                article_date = article['publishOn']
+                article_content = article['content']
+                article_content = clean_content(article_content)
+                article_content_score = sentiment_score(article_content)
+                article_summary = article['summary']
+                for article_no in article_summary:
+                    sum += (sentiment_score(article_no))
+                if(sum > 0 ): article_summary_score = 1
+                elif(sum == 0): article_summary_score = 0
+                elif(sum < 0): article_summary_score = -1
+                if((article_summary_score + article_content_score) > 0) : final_score = 1
+                elif((article_summary_score + article_content_score) < 0) : final_score = -1
+                else: final_score = 0
+                articles_score += final_score
+                new_row['HeadLine'] = article_title
+                new_row['Sentiment'] = final_score
+                new_row['Date'] = article_date
+                new_row["URL"] = article_url
+                self.market_articles_sentiment_df = self.market_articles_sentiment_df.append(new_row, ignore_index=True)
+            except Exception as e:
+                print(f'Problem accured in article No.{counter}, Error details: {e}')
+            new_row.clear()
+            print(f'Finish analyse {counter} articles')
+            counter += 1
+            sum = 0
+        self.market_articles_sentiment_df.to_csv(results_path / f"articles_sentiment_{date}.csv")
+
+
 def news_extractor(self,news_data,category = 'all'):
     stocks_news_dict = {}
     all_stocks_dict = {}
@@ -249,10 +319,6 @@ def get_news_dict(self, category = 'all'):
             querystring = {"category":"market-news::all","until":"0","since":"0","size":self.get_news_number(),"number":"0"}
 
         url = "https://seeking-alpha.p.rapidapi.com/news/v2/list"
-        headers = {
-        	"X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
-        	"X-RapidAPI-Key": os.getenv('sa_api_key')
-        }
         news = requests.request("GET", url, headers=headers, params=querystring)
         news_data = json.loads(news.text)
         return news_data
@@ -260,13 +326,7 @@ def get_news_dict(self, category = 'all'):
 
 def get_articels_list(self):
     url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
-#####################################
     querystring = {"until":"0","since":"0","size":"20","number":"1","category":"market-outlook"} # here its const.... need to chage it
-
-    headers = {
-	    "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
-	    "X-RapidAPI-Key": "cc6a8d8228mshafc0d4b0ccd770ap1b399cjsna358d8033ba0"
-    }
     articels_list = requests.request("GET", url, headers=headers, params=querystring)
     articels_list = json.loads(articels_list.text)
     return articels_list
@@ -322,5 +382,48 @@ def score_to_sentiment(score):
     elif(-0.1 <= score <= 0.1): return ("Netural")
     elif(0.1 < score <= 0.5): return ("Buy")
     elif(0.5 < score <=1): return ("Strong Buy")
+
+
+
+def get_all_articles(id):
+    url = "https://seeking-alpha.p.rapidapi.com/articles/get-details"
+    querystring = {"id": id}
+    try:
+        article = requests.request("GET", url, headers=headers, params=querystring)
+        article = json.loads(article.text)
+    except Exception as e:
+        print(f'Problem at one of the articles ENCODING PROBLEM: {e}')
+    return article
+
+def articles_sentiment(start_date, stop_date):
+    global articles_properties
+    start_date += timedelta(days=1)
+    start_date = datetime.strptime(f'{start_date} 06:59:59', '%Y-%m-%d %H:%M:%S')
+    # start_date -= timedelta(days=2)
+    # stop_date = finish_date - timedelta(days=3)
+    since_timestamp = int(start_date.timestamp())
+    until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
+    articles = []
+    stop = False
+    url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
+    for page in range(0,7):
+        if(stop): break
+        querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":"market-outlook"}
+        try:
+            articels_list = requests.request("GET", url, headers=headers, params=querystring)
+            articels_list = json.loads(articels_list.text)
+            articels_list = articels_list['data']
+            for article in articels_list:
+                date = article['attributes']['publishOn']
+                date = date.replace('T'," ")
+                date =  date[:-6]
+                date_t = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
+                if(stop_date >= date_t.date()) : stop = True
+                elif(stop == False):
+                    articles.append(article['id'])
+                    articles_properties += 1
+        except Exception as e:
+            print(f'EXCEPTION was accured during network connection trying get articles, DETAILS: {e}')
+    return articles
 
 

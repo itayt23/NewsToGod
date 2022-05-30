@@ -12,6 +12,7 @@ from ta.utils import *
 from ta.volatility import *
 from ta.volume import *
 from datetime import date,datetime,timedelta
+import time
 import pymannkendall as mk
 from pathlib import Path
 from dotenv import load_dotenv
