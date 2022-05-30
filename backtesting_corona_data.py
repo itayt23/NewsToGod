@@ -76,8 +76,8 @@ class BackTestingCorona:
         market_1mo = pd.read_csv("market_1mo_short.csv")
         self.technical_weight = 0.03
         self.monthly_weight = 0.17
-        self.news_weight = 0.2
-        self.articles_weight = 0.6
+        self.news_weight = 0.3
+        self.articles_weight = 0.5
         run_back_testing(self,market_1d, market_1wk, market_1mo,results_path)
         self.market_df.to_csv(results_path / f"final_sentiment_spy_corona_weights.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)}')
