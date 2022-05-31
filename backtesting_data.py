@@ -1,4 +1,6 @@
+from ast import Yield
 from concurrent.futures import ThreadPoolExecutor
+from math import fabs
 from timeit import timeit
 from tracemalloc import start
 from typing import Counter
@@ -46,8 +48,10 @@ headers = {
 }
 
 global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-global cut, index, articles_score, articles_properties, news_score, news_properties
+global cut, index, articles_score, articles_properties, news_score, news_properties, money_swing, money_hold
 start_run_time = time.time()
+money_swing = 100
+money_hold = 100
 cut = 0
 articles_properties = 0
 articles_score = 0
@@ -66,44 +70,48 @@ monthly_properties = 0
 class BackTestingData:   
     def __init__(self):
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-        global index
+        global index, money_swing, money_hold
         results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Weights'
         if not results_path.exists():
             results_path.mkdir(parents=True)
         self.market_df = pd.DataFrame(columns=['News Sentiment','Article Sentiment','Technical Score daily',
-            'Technical Score weekly','Technical Score monthly','Final Score','Date', 'HIT'])
-        self.weights_df = pd.DataFrame(columns=["Technical Weight", "Monthly Weight", "News Weight", "Articles Weight", "Score"])
+            'Technical Score weekly','Technical Score monthly','Final Score','Date', 'HIT','My Money', 'Hold Money'])
+        self.weights_df = pd.DataFrame(columns=["Technical Weight", "Monthly Weight", "News Weight", "Articles Weight", "Score", "My Yield","Hold Yield"])
         market_1d = pd.read_csv("market_1d.csv")
         market_1wk = pd.read_csv("market_1wk.csv")
         market_1mo = pd.read_csv("market_1mo.csv")
-        self.technical_weight = 0.03
-        self.monthly_weight = 0.17
-        self.news_weight = 0.2
-        self.articles_weight = 0.6
-        for i in range(1000):
+        self.technical_weight = 0.01
+        self.monthly_weight = 0.55
+        self.news_weight = 0.11
+        self.articles_weight = 0.33
+        for i in range(500):
             run_back_testing(self,market_1d, market_1wk, market_1mo)
             self.weights_df.loc[i, "Technical Weight"] = self.technical_weight
             self.weights_df.loc[i, "Monthly Weight"] = self.monthly_weight
             self.weights_df.loc[i, "News Weight"] = self.news_weight
             self.weights_df.loc[i, "Articles Weight"] = self.articles_weight
             self.weights_df.loc[i, "Score"] =  self.market_df['HIT'].sum()
+            self.weights_df.loc[i, "My Yield"] =  (((self.market_df.loc[self.market_df.index[-1]]["My Money"])/100)-1)*100
+            self.weights_df.loc[i, "Hold Yield"] =  (((self.market_df.loc[self.market_df.index[-1]]["Hold Money"])/100)-1)*100
             rand_weights = np.random.dirichlet(np.ones(4),size=1)
             self.technical_weight = rand_weights[0][0]
             self.news_weight = rand_weights[0][1]
             self.monthly_weight = rand_weights[0][2]
             self.articles_weight = rand_weights[0][3]
-            while(self.monthly_weight < 0.7):
-                rand_weights = np.random.dirichlet(np.ones(4),size=1)
-                self.technical_weight = rand_weights[0][0]
-                self.news_weight = rand_weights[0][1]
-                self.monthly_weight = rand_weights[0][2]
-                self.articles_weight = rand_weights[0][3]
+            # while(self.monthly_weight < 0.7):
+            #     rand_weights = np.random.dirichlet(np.ones(4),size=1)
+            #     self.technical_weight = rand_weights[0][0]
+            #     self.news_weight = rand_weights[0][1]
+            #     self.monthly_weight = rand_weights[0][2]
+            #     self.articles_weight = rand_weights[0][3]
             market_1d = pd.read_csv("market_1d.csv")
             market_1wk = pd.read_csv("market_1wk.csv")
             market_1mo = pd.read_csv("market_1mo.csv")
             index = 0
+            money_hold = 100
+            money_swing = 100
             print(f"finish {i+1} Random Weights")
-        self.weights_df.to_csv(results_path / f"weights check_large_monthlyFOcus2.csv")
+        self.weights_df.to_csv(results_path / f"weights check_Yield_500.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)}')
         # total_scores = 0
         # total_properties = 0
@@ -157,7 +165,7 @@ def add_technical_data(market_1d, market_1wk, market_1mo):
 
 def run_back_testing(self,market_1d, market_1wk, market_1mo):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-    global cut, index, articles_score, articles_properties, news_score, news_properties
+    global cut, index, articles_score, articles_properties, news_score, news_properties, money_swing, money_hold
     iterator = 0
     hit = 0
     results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Weights'
@@ -174,10 +182,10 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         print(f"Problem was acuured during getting last date, Details: \n {traceback.format_exc()}")
     while (current_date > end_date):
         # print(f"finish week: {iterator}")
-        self.technical_weight = 0.03
-        self.monthly_weight = 0.15
-        self.news_weight = 0.32
-        self.articles_weight = 0.5
+        # self.technical_weight = 0.03
+        # self.monthly_weight = 0.15
+        # self.news_weight = 0.32
+        # self.articles_weight = 0.5
         ma_score_daily(market_1d,market_1wk)
         oscillators_score_daily(market_1d, market_1wk, market_1mo)
         ma_score_weekly(market_1wk)
@@ -201,11 +209,11 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
 
         # total_scores = (daily_scores + weekly_scores + monthly_scores*4)*technical_weight + articles_score*articles_weight + news_score*news_weight
         # total_properties = (daily_properties + weekly_properties + monthly_properties*4)*technical_weight + articles_properties*articles_weight + news_properties*news_weight
-        if(score_to_sentiment(articles_score/articles_properties) == "Netural"):
-            self.technical_weight = 0.07
-            self.monthly_weight = 0.76
-            self.news_weight = 0.13
-            self.articles_weight = 0.04
+        # if(score_to_sentiment(articles_score/articles_properties) == "Netural"):
+        #     self.technical_weight = 0.07
+        #     self.monthly_weight = 0.76
+        #     self.news_weight = 0.13
+        #     self.articles_weight = 0.04
         total_scores = (daily_scores + weekly_scores)*self.technical_weight + monthly_scores*self.monthly_weight + articles_score*self.articles_weight + news_score*self.news_weight
         total_properties = (daily_properties + weekly_properties)*self.technical_weight + monthly_properties*self.monthly_weight+ articles_properties*self.articles_weight + news_properties*self.news_weight
 
@@ -230,6 +238,7 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         self.market_df.loc[index, 'HIT'] = hit
 
         target_price = float(market_1wk.loc[market_1wk.index[-1]]["Close"])
+
         market_1d.drop(market_1d.tail(cut).index,inplace = True)
         market_1wk.drop(market_1wk.tail(1).index,inplace = True)
         current_date =  datetime.strptime(market_1wk.loc[market_1wk.index[-1]]["Date"],"%Y-%m-%d").date()
@@ -246,7 +255,65 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         cut = 0
         index += 1
         iterator += 1
-    self.market_df.to_csv(results_path / f"weights details_{index}.csv")
+    run_money_backtesting(self)
+    self.market_df.to_csv(results_path / f"weights details_Yields3_{index}.csv")
+
+
+def run_money_backtesting(self):
+    global money_hold,money_swing
+    inside = False
+    first = True
+    reentry = False
+    sell_signal = False
+    iterator = 0
+    market_1wk = pd.read_csv("market_1wk.csv")
+    pd_copy = self.market_df.copy()
+    final_score = pd_copy.loc[pd_copy.index[-1]]['Final Score']
+    current_date = pd_copy.loc[pd_copy.index[-1]]['Date']
+    end_date = datetime.strptime("2022-05-16", "%Y-%m-%d").date()
+    while(current_date <= end_date):
+        for index, row in market_1wk.iterrows():
+            if(row["Date"] == current_date.strftime("%Y-%m-%d")):
+                open_price = float(market_1wk.loc[index-1]["Close"])
+                close_price = float(market_1wk.loc[index]["Close"])
+                weekly_yield = (close_price - open_price )/open_price*100
+                money_hold = (money_hold * (weekly_yield/100)) + money_hold
+                break
+
+        if(sell_signal and inside):
+            sell_price = float(market_1wk.loc[index]["Open"])
+            tot_yield = (sell_price - buy_price )/buy_price*100
+            money_swing = (money_swing * (tot_yield/100)) + money_swing
+            inside = False
+
+        if(not inside and not first and reentry):
+            buy_price = float(market_1wk.loc[index]["Open"])
+            inside = True
+
+        if(final_score == "Buy" or final_score == "Strong Buy"):
+            if(not inside):
+                reentry = True
+            else: reentry = False
+            sell_signal = False
+            
+        if(final_score == "Sell" or final_score == "Strong Sell"):
+            reentry = False
+            sell_signal = True
+        ############THIS IS JUST IF INISDE IN THE END OF SIMULATION##########################
+        if(current_date == end_date and inside):
+            sell_price = float(market_1wk.loc[index]["Close"])
+            tot_yield = (sell_price - buy_price )/buy_price*100
+            money_swing = (money_swing * (tot_yield/100)) + money_swing
+        ####################################################################################
+        self.market_df.loc[self.market_df.tail(1).index - iterator, 'My Money'] = money_swing
+        self.market_df.loc[self.market_df.tail(1).index - iterator, 'Hold Money'] = money_hold
+        iterator += 1
+        if(current_date == end_date): break
+        pd_copy.drop(pd_copy.tail(1).index,inplace = True)
+        current_date = pd_copy.loc[pd_copy.index[-1]]["Date"]
+        final_score = pd_copy.loc[pd_copy.index[-1]]['Final Score']
+        first = False
+
     
 
 def technical_score_adaptation(self,market):
