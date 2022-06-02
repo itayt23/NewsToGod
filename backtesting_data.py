@@ -84,15 +84,15 @@ class BackTestingData:
         self.monthly_weight = 0.55
         self.news_weight = 0.11
         self.articles_weight = 0.33
-        for i in range(500):
+        for i in range(1000):
             run_back_testing(self,market_1d, market_1wk, market_1mo)
             self.weights_df.loc[i, "Technical Weight"] = self.technical_weight
             self.weights_df.loc[i, "Monthly Weight"] = self.monthly_weight
             self.weights_df.loc[i, "News Weight"] = self.news_weight
             self.weights_df.loc[i, "Articles Weight"] = self.articles_weight
             self.weights_df.loc[i, "Score"] =  self.market_df['HIT'].sum()
-            self.weights_df.loc[i, "My Yield"] =  (((self.market_df.loc[self.market_df.index[-1]]["My Money"])/100)-1)*100
-            self.weights_df.loc[i, "Hold Yield"] =  (((self.market_df.loc[self.market_df.index[-1]]["Hold Money"])/100)-1)*100
+            self.weights_df.loc[i, "My Yield"] =  (((self.market_df.loc[self.market_df.index[0]]["My Money"])/100)-1)*100
+            self.weights_df.loc[i, "Hold Yield"] =  (((self.market_df.loc[self.market_df.index[0]]["Hold Money"])/100)-1)*100
             rand_weights = np.random.dirichlet(np.ones(4),size=1)
             self.technical_weight = rand_weights[0][0]
             self.news_weight = rand_weights[0][1]
@@ -111,7 +111,7 @@ class BackTestingData:
             money_hold = 100
             money_swing = 100
             print(f"finish {i+1} Random Weights")
-        self.weights_df.to_csv(results_path / f"weights check_Yield_500.csv")
+        self.weights_df.to_csv(results_path / f"weights check_Yield_20check.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)}')
         # total_scores = 0
         # total_properties = 0
@@ -175,6 +175,7 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         news_files = glob.glob(str(path_news) + "\*.csv")
         articles_files = glob.glob(str(path_articels) + "\*.csv")
         articles_files.reverse()
+        start_date = datetime.strptime(market_1d.loc[market_1d.index[-1]]["Date"],"%Y-%m-%d").date()
         current_date = datetime.strptime(market_1wk.loc[market_1wk.index[-1]]["Date"],"%Y-%m-%d").date()
         month =  datetime.strptime(market_1mo.loc[market_1mo.index[-1]]["Date"], "%Y-%m-%d").date().month
         end_date = datetime.strptime("2021-01-01", "%Y-%m-%d").date()
@@ -190,7 +191,7 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         oscillators_score_daily(market_1d, market_1wk, market_1mo)
         ma_score_weekly(market_1wk)
         oscillators_score_weekly(market_1d, market_1wk, market_1mo)
-        if(current_date.month == month):
+        if(current_date.month == month or start_date.month == month):
             monthly_scores = 0
             monthly_properties = 0
             ma_score_monthly(market_1mo)
@@ -256,7 +257,7 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         index += 1
         iterator += 1
     run_money_backtesting(self)
-    self.market_df.to_csv(results_path / f"weights details_Yields3_{index}.csv")
+    self.market_df.to_csv(results_path / f"weights details_Yields_sss3_{index}.csv")
 
 
 def run_money_backtesting(self):
@@ -270,13 +271,18 @@ def run_money_backtesting(self):
     pd_copy = self.market_df.copy()
     final_score = pd_copy.loc[pd_copy.index[-1]]['Final Score']
     current_date = pd_copy.loc[pd_copy.index[-1]]['Date']
-    end_date = datetime.strptime("2022-05-16", "%Y-%m-%d").date()
+    end_date =pd_copy.loc[pd_copy.index[0]]["Date"]
+    # end_date = datetime.strptime("2022-05-16", "%Y-%m-%d").date()
     while(current_date <= end_date):
         for index, row in market_1wk.iterrows():
             if(row["Date"] == current_date.strftime("%Y-%m-%d")):
                 open_price = float(market_1wk.loc[index-1]["Close"])
                 close_price = float(market_1wk.loc[index]["Close"])
-                weekly_yield = (close_price - open_price )/open_price*100
+                if(first):
+                    open_price = float(market_1wk.loc[index]["Open"])
+                    weekly_yield = (close_price - open_price )/open_price*100
+                if(not first):
+                    weekly_yield = (close_price - open_price )/open_price*100
                 money_hold = (money_hold * (weekly_yield/100)) + money_hold
                 break
 

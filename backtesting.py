@@ -152,7 +152,7 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo,results_path):
         oscillators_score_daily(market_1d, market_1wk, market_1mo)
         ma_score_weekly(market_1wk)
         oscillators_score_weekly(market_1d, market_1wk, market_1mo)
-        if(current_date.month == month):
+        if(current_date.month == month or start_date.month == month):
             monthly_scores = 0
             monthly_properties = 0
             ma_score_monthly(market_1mo)
