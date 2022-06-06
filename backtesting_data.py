@@ -48,35 +48,29 @@ headers = {
 }
 
 global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-global cut, index, articles_score, articles_properties, news_score, news_properties, money_swing, money_hold
+global cut, index, articles_score, articles_properties, news_score, news_properties, money_swing, money_hold,wining_trades, total_trades
+global sharp_ratio
 start_run_time = time.time()
-money_swing = 100
-money_hold = 100
+money_swing = money_hold = 100
 cut = 0
-articles_properties = 0
-articles_score = 0
-news_score = 0
-news_properties = 0
 index = 0
-total_scores = 0
-total_properties = 0
-daily_scores = 0
-daily_properties = 0
-weekly_scores = 0
-weekly_properties = 0
-monthly_scores = 0
-monthly_properties = 0
+articles_properties = articles_score = news_score = news_properties = 0
+total_scores = total_properties = 0
+daily_scores = daily_properties = weekly_scores = weekly_properties = monthly_scores = monthly_properties = 0
+wining_trades = total_trades = 0
+sharp_ratio = 0
 
 class BackTestingData:   
     def __init__(self):
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-        global index, money_swing, money_hold
+        global index, money_swing, money_hold, wining_trades, total_trades, sharp_ratio
         results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Weights'
         if not results_path.exists():
             results_path.mkdir(parents=True)
         self.market_df = pd.DataFrame(columns=['News Sentiment','Article Sentiment','Technical Score daily',
             'Technical Score weekly','Technical Score monthly','Final Score','Date', 'HIT','My Money', 'Hold Money'])
-        self.weights_df = pd.DataFrame(columns=["Technical Weight", "Monthly Weight", "News Weight", "Articles Weight", "Score", "My Yield","Hold Yield"])
+        self.weights_df = pd.DataFrame(columns=["Technical Weight", "Monthly Weight", "News Weight", "Articles Weight",
+             "Win Rate","Sharp Ratio", "My Yield","Hold Yield"])
         market_1d = pd.read_csv("market_1d.csv")
         market_1wk = pd.read_csv("market_1wk.csv")
         market_1mo = pd.read_csv("market_1mo.csv")
@@ -86,11 +80,18 @@ class BackTestingData:
         self.articles_weight = 0.33
         for i in range(1000):
             run_back_testing(self,market_1d, market_1wk, market_1mo)
+            try:
+                win_rate = (wining_trades/total_trades)*100
+            except:
+                win_rate = "NONE"
             self.weights_df.loc[i, "Technical Weight"] = self.technical_weight
             self.weights_df.loc[i, "Monthly Weight"] = self.monthly_weight
             self.weights_df.loc[i, "News Weight"] = self.news_weight
             self.weights_df.loc[i, "Articles Weight"] = self.articles_weight
-            self.weights_df.loc[i, "Score"] =  self.market_df['HIT'].sum()
+            # self.weights_df.loc[i, "Score"] =  self.market_df['HIT'].sum()
+            # self.weights_df.loc[i, 'Total Trades'] = total_trades
+            self.weights_df.loc[i, 'Win Rate'] = win_rate
+            self.weights_df.loc[i, 'Sharp Ratio'] = sharp_ratio
             self.weights_df.loc[i, "My Yield"] =  (((self.market_df.loc[self.market_df.index[0]]["My Money"])/100)-1)*100
             self.weights_df.loc[i, "Hold Yield"] =  (((self.market_df.loc[self.market_df.index[0]]["Hold Money"])/100)-1)*100
             rand_weights = np.random.dirichlet(np.ones(4),size=1)
@@ -108,10 +109,11 @@ class BackTestingData:
             market_1wk = pd.read_csv("market_1wk.csv")
             market_1mo = pd.read_csv("market_1mo.csv")
             index = 0
-            money_hold = 100
-            money_swing = 100
+            money_hold = money_swing = 100
+            sharp_ratio = 0
             print(f"finish {i+1} Random Weights")
-        self.weights_df.to_csv(results_path / f"weights check_Yield_20check.csv")
+            self.weights_df.to_csv(results_path / f"weights_YieldWIinSharp_1000.csv")
+        self.weights_df.to_csv(results_path / f"weights_YieldWinSharp_1000.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)}')
         # total_scores = 0
         # total_properties = 0
@@ -257,16 +259,18 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         index += 1
         iterator += 1
     run_money_backtesting(self)
-    self.market_df.to_csv(results_path / f"weights details_Yields_sss3_{index}.csv")
+    # self.market_df.to_csv(results_path / f"weights details_Yields_sss3_{index}.csv")
 
 
 def run_money_backtesting(self):
-    global money_hold,money_swing
+    global money_hold,money_swing, wining_trades, total_trades, sharp_ratio
     inside = False
     first = True
-    reentry = False
+    buy_signal = False
     sell_signal = False
+    total_trades = wining_trades = 0
     iterator = 0
+    weekly_return = []
     market_1wk = pd.read_csv("market_1wk.csv")
     pd_copy = self.market_df.copy()
     final_score = pd_copy.loc[pd_copy.index[-1]]['Final Score']
@@ -285,31 +289,38 @@ def run_money_backtesting(self):
                     weekly_yield = (close_price - open_price )/open_price*100
                 money_hold = (money_hold * (weekly_yield/100)) + money_hold
                 break
+        
 
+        if(inside):
+            weekly_return.append(weekly_yield)
         if(sell_signal and inside):
             sell_price = float(market_1wk.loc[index]["Open"])
             tot_yield = (sell_price - buy_price )/buy_price*100
             money_swing = (money_swing * (tot_yield/100)) + money_swing
             inside = False
+            total_trades += 1
+            if tot_yield > 0: wining_trades += 1
 
-        if(not inside and not first and reentry):
+        if(buy_signal and not inside and not first):
             buy_price = float(market_1wk.loc[index]["Open"])
             inside = True
 
         if(final_score == "Buy" or final_score == "Strong Buy"):
             if(not inside):
-                reentry = True
-            else: reentry = False
+                buy_signal = True
+            else: buy_signal = False
             sell_signal = False
             
         if(final_score == "Sell" or final_score == "Strong Sell"):
-            reentry = False
+            buy_signal = False
             sell_signal = True
         ############THIS IS JUST IF INISDE IN THE END OF SIMULATION##########################
         if(current_date == end_date and inside):
             sell_price = float(market_1wk.loc[index]["Close"])
             tot_yield = (sell_price - buy_price )/buy_price*100
             money_swing = (money_swing * (tot_yield/100)) + money_swing
+            total_trades += 1
+            if tot_yield > 0: wining_trades += 1
         ####################################################################################
         self.market_df.loc[self.market_df.tail(1).index - iterator, 'My Money'] = money_swing
         self.market_df.loc[self.market_df.tail(1).index - iterator, 'Hold Money'] = money_hold
@@ -319,6 +330,7 @@ def run_money_backtesting(self):
         current_date = pd_copy.loc[pd_copy.index[-1]]["Date"]
         final_score = pd_copy.loc[pd_copy.index[-1]]['Final Score']
         first = False
+    sharp_ratio = sharpe_ratio(weekly_return)
 
     
 
@@ -1052,6 +1064,34 @@ def concat_stocks(stocks_news_dict):
             stocks = stocks +", "+ value
     return stocks
 
+
+def std_dev(data):
+    # Get number of observations
+    n = len(data)
+    # Calculate mean
+    mean = sum(data) / n
+    # Calculate deviations from the mean
+    deviations = sum([(x - mean)**2 for x in data])
+    # Calculate Variance & Standard Deviation
+    variance = deviations / (n - 1)
+    s_deviation = variance**(1/2)
+    return s_deviation
+
+# Sharpe Ratio From Scratch
+def sharpe_ratio(data, risk_free_rate=1.75):
+    # Calculate Average Daily Return
+    try:
+        mean_weekly_return = (sum(data) / len(data))
+    except:
+        return "NONE"
+    # Calculate Standard Deviation
+    s = std_dev(data)
+    # Calculate Daily Sharpe Ratio
+    weekly_sharpe_ratio = (mean_weekly_return - (risk_free_rate/52)) / s
+    # Annualize Daily Sharpe Ratio
+    sharpe_ratio = 52**(1/2) * weekly_sharpe_ratio
+    
+    return sharpe_ratio
 
 
 
