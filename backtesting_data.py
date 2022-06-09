@@ -48,8 +48,8 @@ headers = {
 }
 
 global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-global cut, index, articles_score, articles_properties, news_score, news_properties, money_swing, money_hold,wining_trades, total_trades
-global sharp_ratio
+global cut, index, articles_score, articles_properties, news_score, news_properties, money_swing, money_hold
+global sharp_ratio,wining_trades, total_trades
 start_run_time = time.time()
 money_swing = money_hold = 100
 cut = 0
@@ -69,22 +69,24 @@ class BackTestingData:
             results_path.mkdir(parents=True)
         self.market_df = pd.DataFrame(columns=['News Sentiment','Article Sentiment','Technical Score daily',
             'Technical Score weekly','Technical Score monthly','Final Score','Date', 'HIT','My Money', 'Hold Money'])
-        self.weights_df = pd.DataFrame(columns=["Technical Weight", "Monthly Weight", "News Weight", "Articles Weight",
+        self.weights_df = pd.DataFrame(columns=["Daily Weight","Weekly Weight", "Monthly Weight", "News Weight", "Articles Weight",
              "Win Rate","Sharp Ratio", "My Yield","Hold Yield"])
         market_1d = pd.read_csv("market_1d.csv")
         market_1wk = pd.read_csv("market_1wk.csv")
         market_1mo = pd.read_csv("market_1mo.csv")
-        self.technical_weight = 0.01
-        self.monthly_weight = 0.55
-        self.news_weight = 0.11
-        self.articles_weight = 0.33
+        self.daily_weight = 0.1#0.01
+        self.weekly_weight = 0.2#0.22
+        self.monthly_weight = 0.3#0.3
+        self.news_weight = 0.2#0.2
+        self.articles_weight= 0.2#0.27
         for i in range(1000):
             run_back_testing(self,market_1d, market_1wk, market_1mo)
             try:
                 win_rate = (wining_trades/total_trades)*100
             except:
                 win_rate = "NONE"
-            self.weights_df.loc[i, "Technical Weight"] = self.technical_weight
+            self.weights_df.loc[i, "Daily Weight"] = self.daily_weight
+            self.weights_df.loc[i, "Weekly Weight"] = self.weekly_weight
             self.weights_df.loc[i, "Monthly Weight"] = self.monthly_weight
             self.weights_df.loc[i, "News Weight"] = self.news_weight
             self.weights_df.loc[i, "Articles Weight"] = self.articles_weight
@@ -94,17 +96,19 @@ class BackTestingData:
             self.weights_df.loc[i, 'Sharp Ratio'] = sharp_ratio
             self.weights_df.loc[i, "My Yield"] =  (((self.market_df.loc[self.market_df.index[0]]["My Money"])/100)-1)*100
             self.weights_df.loc[i, "Hold Yield"] =  (((self.market_df.loc[self.market_df.index[0]]["Hold Money"])/100)-1)*100
-            rand_weights = np.random.dirichlet(np.ones(4),size=1)
-            self.technical_weight = rand_weights[0][0]
-            self.news_weight = rand_weights[0][1]
-            self.monthly_weight = rand_weights[0][2]
-            self.articles_weight = rand_weights[0][3]
-            # while(self.monthly_weight < 0.7):
-            #     rand_weights = np.random.dirichlet(np.ones(4),size=1)
-            #     self.technical_weight = rand_weights[0][0]
-            #     self.news_weight = rand_weights[0][1]
-            #     self.monthly_weight = rand_weights[0][2]
-            #     self.articles_weight = rand_weights[0][3]
+            rand_weights = np.random.dirichlet(np.ones(5),size=1)
+            self.daily_weight = rand_weights[0][0]
+            self.weekly_weight = rand_weights[0][1]
+            self.news_weight = rand_weights[0][2]
+            self.monthly_weight = rand_weights[0][3]
+            self.articles_weight = rand_weights[0][4]
+            while(self.monthly_weight > 0.55 or self.monthly_weight < 0.2 or self.daily_weight > 0.2):
+                rand_weights = np.random.dirichlet(np.ones(5),size=1)
+                self.daily_weight = rand_weights[0][0]
+                self.weekly_weight = rand_weights[0][1]
+                self.news_weight = rand_weights[0][2]
+                self.monthly_weight = rand_weights[0][3]
+                self.articles_weight = rand_weights[0][4]
             market_1d = pd.read_csv("market_1d.csv")
             market_1wk = pd.read_csv("market_1wk.csv")
             market_1mo = pd.read_csv("market_1mo.csv")
@@ -112,8 +116,8 @@ class BackTestingData:
             money_hold = money_swing = 100
             sharp_ratio = 0
             print(f"finish {i+1} Random Weights")
-            self.weights_df.to_csv(results_path / f"weights_YieldWIinSharp_1000.csv")
-        self.weights_df.to_csv(results_path / f"weights_YieldWinSharp_1000.csv")
+            self.weights_df.to_csv(results_path / f"weights 1000.csv")
+        self.weights_df.to_csv(results_path / f"weights 1000.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)}')
         # total_scores = 0
         # total_properties = 0
@@ -217,8 +221,8 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         #     self.monthly_weight = 0.76
         #     self.news_weight = 0.13
         #     self.articles_weight = 0.04
-        total_scores = (daily_scores + weekly_scores)*self.technical_weight + monthly_scores*self.monthly_weight + articles_score*self.articles_weight + news_score*self.news_weight
-        total_properties = (daily_properties + weekly_properties)*self.technical_weight + monthly_properties*self.monthly_weight+ articles_properties*self.articles_weight + news_properties*self.news_weight
+        total_scores = daily_scores*self.daily_weight + weekly_scores*self.weekly_weight + monthly_scores*self.monthly_weight + articles_score*self.articles_weight + news_score*self.news_weight
+        total_properties = daily_properties*self.daily_weight + weekly_properties*self.weekly_weight + monthly_properties*self.monthly_weight+ articles_properties*self.articles_weight + news_properties*self.news_weight
 
         if(index != 0):
             sentiment = score_to_sentiment(total_scores/total_properties)
@@ -231,12 +235,16 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
                 else: hit = -1
             else: hit = 0
 
+        final_score = score_to_sentiment(total_scores/total_properties)
+        # if(score_to_sentiment(total_scores/total_properties) == "Netural"):
+        #     final_score = score_to_sentiment(weekly_scores/weekly_properties)
+
         self.market_df.loc[index, 'News Sentiment'] = score_to_sentiment(news_score/news_properties)
         self.market_df.loc[index, 'Article Sentiment'] = score_to_sentiment(articles_score/articles_properties)
         self.market_df.loc[index, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
         self.market_df.loc[index, 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
         self.market_df.loc[index, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
-        self.market_df.loc[index, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
+        self.market_df.loc[index, 'Final Score'] = final_score #score_to_sentiment(total_scores/total_properties)
         self.market_df.loc[index, 'Date'] = current_date
         self.market_df.loc[index, 'HIT'] = hit
 
@@ -259,7 +267,7 @@ def run_back_testing(self,market_1d, market_1wk, market_1mo):
         index += 1
         iterator += 1
     run_money_backtesting(self)
-    # self.market_df.to_csv(results_path / f"weights details_Yields_sss3_{index}.csv")
+    # self.market_df.to_csv(results_path / f"weights zeros 1_{index}.csv")
 
 
 def run_money_backtesting(self):
@@ -1066,15 +1074,18 @@ def concat_stocks(stocks_news_dict):
 
 
 def std_dev(data):
-    # Get number of observations
-    n = len(data)
-    # Calculate mean
-    mean = sum(data) / n
-    # Calculate deviations from the mean
-    deviations = sum([(x - mean)**2 for x in data])
-    # Calculate Variance & Standard Deviation
-    variance = deviations / (n - 1)
-    s_deviation = variance**(1/2)
+    try:
+        # Get number of observations
+        n = len(data)
+        # Calculate mean
+        mean = sum(data) / n
+        # Calculate deviations from the mean
+        deviations = sum([(x - mean)**2 for x in data])
+        # Calculate Variance & Standard Deviation
+        variance = deviations / (n - 1)
+        s_deviation = variance**(1/2)
+    except:
+        return -1
     return s_deviation
 
 # Sharpe Ratio From Scratch
@@ -1086,6 +1097,7 @@ def sharpe_ratio(data, risk_free_rate=1.75):
         return "NONE"
     # Calculate Standard Deviation
     s = std_dev(data)
+    if s == -1 : return "NONE"
     # Calculate Daily Sharpe Ratio
     weekly_sharpe_ratio = (mean_weekly_return - (risk_free_rate/52)) / s
     # Annualize Daily Sharpe Ratio

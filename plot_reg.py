@@ -12,10 +12,11 @@ import seaborn as sns
 
 
 data_path = Path.cwd() / 'Results' / 'BackTesting' / 'Weights'
-weights_df = pd.read_csv(data_path / "weights_YieldWIinSharp_1000.csv")
+weights_df = pd.read_csv(data_path / "weights 1500.csv")
 y = weights_df[["My Yield"]]
-x = weights_df[["Technical Weight","Monthly Weight","News Weight","Articles Weight"]]
-x_technical = weights_df[["Technical Weight"]]
+x = weights_df[["Daily Weight","Weekly Weight","Monthly Weight","News Weight","Articles Weight"]]
+x_daily = weights_df[["Daily Weight"]]
+x_weekly = weights_df[["Weekly Weight"]]
 x_monthly = weights_df[["Monthly Weight"]]
 x_news = weights_df[["News Weight"]]
 x_articles = weights_df[["Articles Weight"]]
@@ -26,10 +27,10 @@ x_articles = weights_df[["Articles Weight"]]
 
 
 #add constant to predictor variables
-# x_news = sm.add_constant(x_news)
+# x_articles = sm.add_constant(x_articles)
 
 #fit linear regression model
-model = sm.OLS(y,x).fit()
+model = sm.OLS(y,x_articles).fit()
 
 #view model summary
 # sns.regplot(y="My Yield", x="Technical Weight", data=weights_df)
@@ -37,9 +38,9 @@ print(model.summary())
 
 
 # prstd, iv_l, iv_u = wls_prediction_std(model)
-fig, ax = plt.subplots()
-ax.plot(x, y, 'o', label="data")
-plt.show()
+# fig, ax = plt.subplots()
+# ax.plot(x_weekly, y, 'o', label="data")
+# plt.show()
 # ax.plot(x, model.fittedvalues, 'r--.', label="OLS")
 # # ax.plot(x, iv_u, 'r--')
 # # ax.plot(x, iv_l, 'r--')
