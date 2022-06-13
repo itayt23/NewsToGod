@@ -30,7 +30,6 @@ import traceback
 # market_1wk.to_csv("market_1wk.csv")
 # market_1mo.to_csv("market_1mo.csv")
 
-#TODO: need to create ThreadPool
 # need to check if im taking monthhlylast closing price if its make sense.
 #add try and except in every place you need 
 # add finish print line after finish reading article or news
@@ -85,16 +84,14 @@ class Market:
         add_technical_data(market_1d, market_1wk, market_1mo)
         run(self,market_1d, market_1wk, market_1mo,results_path)
         self.market_df.to_csv(results_path / f"final_sentiment_spy.csv")
-        print(f'TOTAL RUN TIME WAS: {time.time() - start_run_time}')
-        # total_scores = 0
-        # total_properties = 0
-        # daily_scores = 0
-        # daily_properties = 0
-        # weekly_scores = 0
-        # weekly_properties = 0
-        # cut = 0
-        # index = 0
+        print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)} minutes')
+      
+    def get_sentiment_number(self):
+        return self.sentiment
 
+    def get_sentiment(self):
+        return score_to_sentiment(self.sentiment) 
+    
 def convert_indicies(market):
     if(market == 'spy'): return 'SPX'
     if(market == 'qqq'): return 'NDX'
