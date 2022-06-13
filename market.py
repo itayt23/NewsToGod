@@ -30,6 +30,7 @@ import traceback
 # market_1wk.to_csv("market_1wk.csv")
 # market_1mo.to_csv("market_1mo.csv")
 
+#TODO: need to create ThreadPool
 # need to check if im taking monthhlylast closing price if its make sense.
 #add try and except in every place you need 
 # add finish print line after finish reading article or news
@@ -64,11 +65,11 @@ monthly_properties = 0
         # market_1d.to_csv("market_1d.csv")
         # market_1wk.to_csv("market_1wk.csv")
         # market_1mo.to_csv("market_1mo.csv")
-class BackTesting:   
+class Market:   
     def __init__(self):
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
         global index
-        results_path = Path.cwd() / 'Results' / 'BackTesting' 
+        results_path = Path.cwd() / 'Results' / 'csv_files' / 'Market Sentiment' 
         if not results_path.exists():
             results_path.mkdir(parents=True)
         self.market_df = pd.DataFrame(columns=['News Sentiment','Article Sentiment','Technical Score daily',
@@ -76,12 +77,13 @@ class BackTesting:
         self.technical_df = pd.DataFrame(index=['daily','weekly','monthly'],columns=['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30',
             'SMA50','EMA50','SMA100','EMA100','SMA200','EMA200','RSI','STOCH','CCI','ADX','AWS','MOM','MACD','STOCHRSI','WILLIAM','ULTIMATE'])
         indices = ['spy','qqq','dia']
+        self.sentiment = 0
         # for market in indices:
             # market_index = convert_indicies(market)
         market_1d, market_1wk, market_1mo = download_symbol_data('spy')
         market_1d, market_1wk, market_1mo = clean_df_nans(market_1d, market_1wk, market_1mo)
         add_technical_data(market_1d, market_1wk, market_1mo)
-        run_back_testing(self,market_1d, market_1wk, market_1mo,results_path)
+        run(self,market_1d, market_1wk, market_1mo,results_path)
         self.market_df.to_csv(results_path / f"final_sentiment_spy.csv")
         print(f'TOTAL RUN TIME WAS: {time.time() - start_run_time}')
         # total_scores = 0
@@ -139,61 +141,60 @@ def add_technical_data(market_1d, market_1wk, market_1mo):
     #     market_1d.drop(market_1d.tail(1).index,inplace = True)
     #     date_1d = market_1d.loc[market_1d.index[-1]]["Date"].date() 
 
-def run_back_testing(self,market_1d, market_1wk, market_1mo,results_path):
+def run(self,market_1d, market_1wk, market_1mo,results_path):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
     global cut, index, articles_score, articles_properties, news_score, news_properties
     try:
+        start_date_news = today = date.today()
+        start_week = today - timedelta(days=today.weekday())
         start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
         stop_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
-        current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+        current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() # !i think i dont need this
         month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
         end_date = datetime.strptime("2021-01-01", "%Y-%m-%d").date()
     except Exception as e:
         print(f"Problem was acuured during getting last date, Details: \n {traceback.format_exc()}")
-    while (current_date > end_date):
-        ma_score_daily(market_1d,market_1wk)
-        oscillators_score_daily(market_1d, market_1wk, market_1mo)
-        ma_score_weekly(market_1wk)
-        oscillators_score_weekly(market_1d, market_1wk, market_1mo)
-        if(current_date.month == month or start_date.month == month):
-            monthly_scores = 0
-            monthly_properties = 0
-            ma_score_monthly(market_1mo)
-            oscillators_score_monthly(market_1d, market_1wk, market_1mo)
-            market_1mo.drop(market_1mo.tail(1).index,inplace = True)
-            month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
-        run_market_news_processor(start_date, stop_date)
-        run_articles_news_processor(start_date, stop_date)
-
-        total_scores = daily_scores + weekly_scores + monthly_scores + articles_score + news_score
-        total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties + news_properties
-
-        self.market_df.loc[index, 'News Sentiment'] = score_to_sentiment(news_score/news_properties)
-        self.market_df.loc[index, 'Article Sentiment'] = score_to_sentiment(articles_score/articles_properties)
-        self.market_df.loc[index, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
-        self.market_df.loc[index, 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
-        self.market_df.loc[index, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
-        self.market_df.loc[index, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
-        self.market_df.loc[index, 'Date'] = current_date
-
-        market_1d.drop(market_1d.tail(cut).index,inplace = True)
-        market_1wk.drop(market_1wk.tail(1).index,inplace = True)
-        current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
-        start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
-        stop_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
-        total_scores = 0
-        total_properties = 0
-        daily_scores = 0
-        daily_properties = 0
-        weekly_scores = 0
-        weekly_properties = 0
-        articles_score = 0
-        articles_properties = 0
-        news_score = 0
-        news_properties = 0
-        cut = 0
-        index += 1
-        self.market_df.to_csv(results_path / f"final_sentiment_spy.csv")
+    ma_score_daily(market_1d,market_1wk)
+    oscillators_score_daily(market_1d, market_1wk, market_1mo)
+    ma_score_weekly(market_1wk)
+    oscillators_score_weekly(market_1d, market_1wk, market_1mo)
+    if(current_date.month == month or start_date.month == month):
+        monthly_scores = 0
+        monthly_properties = 0
+        ma_score_monthly(market_1mo)
+        oscillators_score_monthly(market_1d, market_1wk, market_1mo)
+        market_1mo.drop(market_1mo.tail(1).index,inplace = True)
+        month = market_1mo.loc[market_1mo.index[-1]]["Date"].date().month
+    run_market_news_processor(start_date_news, stop_date)
+    run_articles_news_processor(start_date_news, stop_date)
+    total_scores = daily_scores + weekly_scores + monthly_scores + articles_score + news_score
+    total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties + news_properties
+    self.market_df.loc[index, 'News Sentiment'] = score_to_sentiment(news_score/news_properties)
+    self.market_df.loc[index, 'Article Sentiment'] = score_to_sentiment(articles_score/articles_properties)
+    self.market_df.loc[index, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
+    self.market_df.loc[index, 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
+    self.market_df.loc[index, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
+    self.market_df.loc[index, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
+    self.market_df.loc[index, 'Date'] = current_date
+    self.sentiment = total_scores/total_properties
+    market_1d.drop(market_1d.tail(cut).index,inplace = True)
+    market_1wk.drop(market_1wk.tail(1).index,inplace = True)
+    current_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+    start_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
+    stop_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() - timedelta(days=3)
+    # total_scores = 0
+    # total_properties = 0
+    # daily_scores = 0
+    # daily_properties = 0
+    # weekly_scores = 0
+    # weekly_properties = 0
+    # articles_score = 0
+    # articles_properties = 0
+    # news_score = 0
+    # news_properties = 0
+    # cut = 0
+    # index += 1
+    # self.market_df.to_csv(results_path / f"final_sentiment_spy.csv")
     
 
 def technical_score_adaptation(self,market):
@@ -235,11 +236,11 @@ def ma_score_daily(market_1d,market_1wk):
     try:
         temp_df = pd.DataFrame()
         it_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
-        start_week_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
-        start_next_week_date = start_week_date + timedelta(days=7)
+        stop_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date() 
+        #start_next_week_date = stop_date + timedelta(days=7) #! need to check why i needs this?
         moving_averages = ['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30','SMA50','EMA50','SMA100','EMA100','SMA200','EMA200']
         temp_df = market_1d.copy(deep=True)
-        while(start_next_week_date > it_date >= start_week_date):
+        while(it_date >= stop_date):
             for ma in moving_averages:
                 daily_properties +=1
                 if(temp_df[ma].iloc[-1] > temp_df['Close'].iloc[-1]):
@@ -254,7 +255,7 @@ def ma_score_daily(market_1d,market_1wk):
         daily_properties = 0
         daily_scores = 0
 
-def ma_score_weekly(market_1wk):
+def ma_score_weekly(market_1wk): #! here i can add some more days into the week...currently im taking just week before
     global weekly_scores, weekly_properties
     try:
         moving_averages = ['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30','SMA50','EMA50','SMA100','EMA100','SMA200','EMA200']
@@ -288,10 +289,10 @@ def oscillators_score_daily(market_1d, market_1wk, market_1mo):
     global daily_properties
     try:
         it_date = market_1d.loc[market_1d.index[-1]]["Date"].date()
-        start_week_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
-        start_next_week_date = start_week_date + timedelta(days=7)
+        stop_date = market_1wk.loc[market_1wk.index[-1]]["Date"].date()
+        # start_next_week_date = start_week_date + timedelta(days=7)
         temp_df = market_1d.copy(deep=True)
-        while(start_next_week_date > it_date >= start_week_date):
+        while(it_date >= stop_date):
             rsi_sentiment_daily(temp_df, market_1wk, market_1mo)
             stochastic_sentiment_daily(temp_df)
             cci_sentiment_daily(temp_df)
@@ -749,7 +750,7 @@ def articles_week_analyzer(articles, date):
     counter = 1
     sum = 0
     market_articles_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
-    results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Articles Sentiment'
+    results_path = Path.cwd() / 'Results' / 'csv_files' / 'Market Articles'
     if not results_path.exists():
         results_path.mkdir(parents=True)
     new_row ={}
@@ -843,7 +844,7 @@ def articles_sentiment(start_date, stop_date):
 def run_market_news_processor(start_date, stop_date):
     market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
     date = datetime.now().strftime("%d.%m.%Y-%I.%M")
-    results_path = Path.cwd() / 'Results' / 'BackTesting' /'News Sentiment'
+    results_path = Path.cwd() / 'Results' / 'csv_files' /'Market news'
     if not results_path.exists():
         results_path.mkdir(parents=True)
     news_data = get_news_dict(start_date, stop_date)
@@ -851,7 +852,7 @@ def run_market_news_processor(start_date, stop_date):
     try:       
         market_news_sentiment_df.to_csv(results_path / f"market_news_sentiment_{date}.csv")
     except Exception:
-        print(f"Problem was accured while tried to save csv file, Details: \n {traceback.format_exc()}")
+        print(f"Problem was accured while saving the market news csv file, Details: \n {traceback.format_exc()}")
 
 def news_extractor(news_data, date):
     global news_score
@@ -893,11 +894,11 @@ def get_news_dict(start_date, stop_date):
     start_date += timedelta(days=1)
     start_date = datetime.strptime(f'{start_date} 06:59:59', '%Y-%m-%d %H:%M:%S')
     since_timestamp = int(start_date.timestamp())
-    until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
+    # until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
     url = "https://seeking-alpha.p.rapidapi.com/news/v2/list"
-    for page in range(0,7):
+    for page in range(0,8):
         if(stop): break
-        querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":"market-news::us-economy"}
+        querystring = {"until":since_timestamp,"since":"0","size":"40","number":page,"category":"market-news::us-economy"}
         try:
             news_data = requests.request("GET", url, headers=headers, params=querystring)
             news_data = json.loads(news_data.text)
@@ -927,4 +928,6 @@ def concat_stocks(stocks_news_dict):
     return stocks
 
 
-BackTesting()
+
+
+Market()
