@@ -17,10 +17,30 @@ import pymannkendall as mk
 from pathlib import Path
 from dotenv import load_dotenv
 import os
+from dateutil.relativedelta import relativedelta
 
 
-#write tipranks score
-#wrtie final score formula
+#modified needed:
+# total proparties change from const to varibal
+# need to check the round functions......
+
+global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
+global cut, index, articles_score, articles_properties, news_score, news_properties
+start_run_time = time.time()
+cut = 0
+articles_properties = 0
+articles_score = 0
+news_score = 0
+news_properties = 0
+index = 0
+total_scores = 0
+total_properties = 0
+daily_scores = 0
+daily_properties = 0
+weekly_scores = 0
+weekly_properties = 0
+monthly_scores = 0
+monthly_properties = 0
 
 class MarketSentiment:
     def __init__(self,news_number):
@@ -345,6 +365,22 @@ def is_date_round_wk(df):
     if((date_wk + timedelta(days=7)) == today_date):
         return True
     return False
+
+def round_date_mo2(df):
+    last_date_mo = df.loc[df.index[-1]]["Date"].date()
+    second_date_mo = df.loc[df.index[-2]]["Date"].date()
+    if((second_date_mo + relativedelta(months=1)) == last_date_mo):
+        return
+    df.drop(df.tail(1).index,inplace = True)
+    return 
+
+def round_date_wk2(df):
+    last_date_wk = df.loc[df.index[-1]]["Date"].date()
+    second_date_wk = df.loc[df.index[-2]]["Date"].date()
+    if((second_date_wk + timedelta(days=7)) == last_date_wk):
+        return
+    df.drop(df.tail(1).index,inplace = True)
+    return 
 
 def moving_averages_extract_data(market_1d, market_1wk, market_1mo):
 
