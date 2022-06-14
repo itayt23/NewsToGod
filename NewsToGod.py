@@ -15,6 +15,9 @@ window = layout.setWindow(layout.getMainLayout())
 begin = False
 done = False
 
+# window.close()
+# window = sg.Window('Caller Finder',layout.getWhatsAppLayout(), size=(750,350),element_justification='c')
+
 def run_market_sentiment(news_num):
     MarketSentiment(news_num)
 
@@ -55,14 +58,6 @@ def process_user_input():
             news_num = values["-NEWS_NUMBER-"]
             run_market_sentiment(news_num)
             window["-PROG-"].UpdateBar(2)
-            done = True
-        if event == "Visualize News Sentiment":
-            begin = True
-            window["-PROG-"].UpdateBar(1)
-            news_num = values["-NEWS_NUMBER-"]
-            run_news_processor(news_num)
-            window["-PROG-"].UpdateBar(2)
-            window["-PROG-"].UpdateBar(3)
             done = True
         if(done):
             print("NewsToGod was finish successfully! =)")

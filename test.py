@@ -29,10 +29,10 @@ load_dotenv("api.env")
 tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
 model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 # url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
-headers = {
- "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
- "X-RapidAPI-Key": os.getenv('sa_api_key')
-}
+# headers = {
+#  "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
+#  "X-RapidAPI-Key": os.getenv('sa_api_key')
+# }
 
 
 def articles_sentiment(start_date, stop_date):
@@ -42,12 +42,18 @@ def articles_sentiment(start_date, stop_date):
     articles = []
     dates = []
     stop = False
-    url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
+    # url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
+    # url = "https://seekingalpha.com/api/v3/articles"
+    url = "https://seekingalpha.com/api/v3/articles"
+    # headers = {
+    #     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/74.0.3729.169 Safari/537.36" ,
+    #     'referer':'https://seekingalpha.com/api/v3/market_open'
+    # }
     for page in range(0,7):
         if(stop): break
-        querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":"market-outlook"}
+        querystring = {"until":"0","since":"0","size":"40","number":"1","category":"sectors::energy"}
         try:
-            articels_list = requests.request("GET", url, headers=headers, params=querystring)
+            articels_list = requests.request("GET", url, params=querystring)
             articels_list = json.loads(articels_list.text)
             articels_list = articels_list['data']
             for article in articels_list:
@@ -140,13 +146,29 @@ def fetch(id):
     url = "https://seeking-alpha.p.rapidapi.com/articles/get-details"
     querystring = {"id": id}
     try:
-        article = requests.request("GET", url, headers=headers, params=querystring)
+        article = requests.request("GET", url, params=querystring)
         article = json.loads(article.text)
         print(id)
     except:
         print('Problem at one of the articles ENCODING PROBLEM')
     return article
     
+##############-U.S. Sector-##############
+# Materials - XLB
+# Communication Services - XLC
+# Consumer Discretionary = XLY
+# Consumer Staples - XLP
+# Energy - XLE
+# Finance = XLF -> V
+# Healthcare - XLV
+# Industrials - XLI
+# Technology - XLK
+# Utilities = XLU
+# Real Estate - XLRE
+
+
+
+
 
 
 market_1d = pd.read_csv("market_1d.csv")
@@ -154,7 +176,8 @@ market_1wk = pd.read_csv("market_1wk.csv")
 market_1mo = pd.read_csv("market_1mo.csv")
 start_date = datetime.strptime('2022-05-17 06:59:59', '%Y-%m-%d %H:%M:%S')
 stop_date = datetime.strptime('2022-05-14 06:59:59', '%Y-%m-%d %H:%M:%S')
-
+sector = yf.download("xlre",interval="1d",period="1y")
+print(sector)
 
 
 articles_id = articles_sentiment(start_date, stop_date)
