@@ -5,9 +5,8 @@ class Layout:
         sg.theme("DarkPurple4") 
 
         self.layout_main = [[sg.T("")],
-        [sg.Text("Please Choose how many news to analyze: ",font=('12')), sg.Combo(key="-NEWS_NUMBER-" ,values=[2,10,25,40], default_value=25,size=(5,5),font=('12'))],
         [sg.T("")],
-        [sg.Button("Get Markets Sentiment",font=('12')), sg.T("     ")],
+        [sg.Button("Get Market Sentiment",font=('11')), sg.T("     "),sg.Button("Get Sectors Sentiment",font=('11')), sg.T("     ")],
         [sg.T("")],
         [sg.Text("Progress: ",font=('12')), sg.ProgressBar(max_value=2, orientation='h', size=(30,20), key="-PROG-",bar_color="gray")],
         [sg.Output(key='-OUT1-', size=(100, 8))],

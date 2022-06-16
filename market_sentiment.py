@@ -64,7 +64,7 @@ monthly_properties = 0
         # market_1d.to_csv("market_1d.csv")
         # market_1wk.to_csv("market_1wk.csv")
         # market_1mo.to_csv("market_1mo.csv")
-class Market:   
+class MarketSentiment:   
     def __init__(self):
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
         global index
@@ -927,4 +927,4 @@ def concat_stocks(stocks_news_dict):
 
 
 
-Market()
+# MarketSentiment()

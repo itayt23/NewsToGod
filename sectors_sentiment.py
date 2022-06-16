@@ -24,7 +24,7 @@ from ta.volatility import *
 from ta.volume import *
 import pymannkendall as mk
 import traceback
-
+import subprocess
 
 # sector_1d.to_csv("sector_1d.csv")
 # sector_1wk.to_csv("sector_1wk.csv")
@@ -44,10 +44,12 @@ headers = {
 }
 
 global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-global cut, articles_score, articles_properties, news_score, news_properties
+global cut, articles_score, articles_properties, news_score, news_properties, zacks_score, zacks_properties
 start_run_time = time.time()
+zacks_score = 0 
+zacks_properties = 1
 cut = 0
-articles_properties = 1
+articles_properties = 1 # TODO: need to change it after dealing with articles
 articles_score = 0
 news_score = 0
 news_properties = 1
@@ -63,7 +65,7 @@ monthly_properties = 0
         # sector_1d.to_csv("sector_1d.csv")
         # sector_1wk.to_csv("sector_1wk.csv")
         # sector_1mo.to_csv("sector_1mo.csv")
-class Sectors:   
+class SectorsSentiment:   
     def __init__(self):
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
         results_path = Path.cwd() / 'Results' / 'csv_files' / 'Sectors'  
@@ -88,11 +90,10 @@ class Sectors:
         self.utilities_sentiment = 0
         self.real_estate_sentiment = 0
         for sector in sectors:
-            self.sector = sector
             sector_1d, sector_1wk, sector_1mo = download_symbol_data(sector)
             sector_1d, sector_1wk, sector_1mo = clean_df_nans(sector_1d, sector_1wk, sector_1mo)
             add_technical_data(sector_1d, sector_1wk, sector_1mo)
-            run(self,sector_1d, sector_1wk, sector_1mo,results_path)
+            run(self,sector_1d, sector_1wk, sector_1mo, sector)
             print(f'FINISH ANALYSE {sector} | TOTAL RUN TIME: {round((time.time() - start_run_time)/60, 2)} minutes')
         self.sector_df.to_csv(results_path / f"Sectors final sentiment.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)} minutes')
@@ -144,9 +145,9 @@ def add_technical_data(sector_1d, sector_1wk, sector_1mo):
     #     sector_1d.drop(sector_1d.tail(1).index,inplace = True)
     #     date_1d = sector_1d.loc[sector_1d.index[-1]]["Date"].date() 
 
-def run(self,sector_1d, sector_1wk, sector_1mo,results_path):
+def run(self,sector_1d, sector_1wk, sector_1mo,sector):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
-    global cut, index, articles_score, articles_properties, news_score, news_properties
+    global cut, index, articles_score, articles_properties, news_score, news_properties,zacks_score,zacks_properties
     try:
         start_date_news = today = date.today()
         start_week = today - timedelta(days=today.weekday())
@@ -168,19 +169,20 @@ def run(self,sector_1d, sector_1wk, sector_1mo,results_path):
         oscillators_score_monthly(sector_1d, sector_1wk, sector_1mo)
         sector_1mo.drop(sector_1mo.tail(1).index,inplace = True)
         month = sector_1mo.loc[sector_1mo.index[-1]]["Date"].date().month
-    run_zacks_rank()
+    zacks_score = run_zacks_rank(sector)
     # run_market_news_processor(start_date_news, stop_date)
     # run_articles_news_processor(start_date_news, stop_date)
-    total_scores = daily_scores + weekly_scores + monthly_scores + articles_score + news_score
-    total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties + news_properties
-    self.sector_df.loc[self.sector, 'News Sentiment'] = score_to_sentiment(news_score/news_properties)
-    self.sector_df.loc[self.sector, 'Article Sentiment'] = score_to_sentiment(articles_score/articles_properties)
-    self.sector_df.loc[self.sector, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
-    self.sector_df.loc[self.sector, 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
-    self.sector_df.loc[self.sector, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
-    self.sector_df.loc[self.sector, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
-    self.sector_df.loc[self.sector, 'Date'] = current_date
-    self.sentiment = total_scores/total_properties
+    total_scores = daily_scores + weekly_scores + monthly_scores + articles_score + news_score + zacks_score
+    total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties + news_properties + zacks_properties
+    self.sector_df.loc[sector, 'News Sentiment'] = score_to_sentiment(news_score/news_properties)
+    self.sector_df.loc[sector, 'Article Sentiment'] = score_to_sentiment(articles_score/articles_properties)
+    self.sector_df.loc[sector, 'Zacks Rank'] = zacks_to_sentiment(zacks_score)
+    self.sector_df.loc[sector, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
+    self.sector_df.loc[sector, 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
+    self.sector_df.loc[sector, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
+    self.sector_df.loc[sector, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
+    self.sector_df.loc[sector, 'Date'] = current_date
+    update_sentiment(self, sector)
     sector_1d.drop(sector_1d.tail(cut).index,inplace = True)
     sector_1wk.drop(sector_1wk.tail(1).index,inplace = True)
     current_date = sector_1wk.loc[sector_1wk.index[-1]]["Date"].date()
@@ -196,11 +198,43 @@ def run(self,sector_1d, sector_1wk, sector_1mo,results_path):
     articles_properties = 1
     news_score = 0
     news_properties = 1
+    zacks_score = 0
     cut = 0
     # self.sector_df.to_csv(results_path / f"final_sentiment_spy.csv")
     
-def run_zacks_rank():
-    pass
+def run_zacks_rank(sector):
+    global zacks_score
+    try:
+        data = subprocess.Popen("zacks-api "+sector, shell=True, stdout=subprocess.PIPE).stdout.read()
+        data = str(data, 'utf-8')
+        data = data.strip("\r\n")
+        data = data.split(',')
+        for line in data:
+            if 'zacksRank' in line and line != 'zacksRankText':
+                rating = line
+        rating = rating.split(":")
+        rating = rating[1]
+        rating = rating.strip(" ").replace('"',"")
+        rating = int(rating)
+        zacks_score = zacks_to_score(rating)
+        return rating
+    except Exception as e:
+        print('Problem with Zacks website: '+str(e))
+        return 0
+def update_sentiment(self,sector):
+    global total_scores,total_properties
+    if(sector == 'XLB'):  self.materials_sentiment = total_scores/total_properties
+    elif(sector == 'XLC'): self.communication_sentimennt = total_scores/total_properties
+    elif(sector == 'XLY'): self.consumer_discretionary_sentiment = total_scores/total_properties
+    elif(sector == 'XLP'): self.consumer_staples_sentiment = total_scores/total_properties
+    elif(sector == 'XLE'): self.energy_sentiment = total_scores/total_properties
+    elif(sector == 'XLF'): self.finance_sentiment = total_scores/total_properties
+    elif(sector == 'XLV'): self.healthcare_sentiment = total_scores/total_properties
+    elif(sector == 'XLI'): self.industrial_sentiment = total_scores/total_properties
+    elif(sector == 'XLK'): self.technology_sentiment = total_scores/total_properties
+    elif(sector == 'XLU'): self.utilities_sentiment = total_scores/total_properties
+    elif(sector == 'XLRE'): self.real_estate_sentiment = total_scores/total_properties
+
 def technical_score_adaptation(self,market):
     sma_flag = True
     sma_number = 12
@@ -233,6 +267,13 @@ def score_to_sentiment(score):
     elif(-0.1 <= score <= 0.1): return ("Netural")
     elif(0.1 < score <= 0.5): return ("Buy")
     elif(0.5 < score <=1): return ("Strong Buy")
+
+def zacks_to_sentiment(score):
+    if(score == 1): return ("Strong Sell")
+    elif(score == 2): return ("Sell")
+    elif(score == 3): return ("Netural")
+    elif(score == 4): return ("Buy")
+    elif(score == 5): return ("Strong Buy")
 
 
 def ma_score_daily(sector_1d,sector_1wk):
@@ -932,6 +973,10 @@ def concat_stocks(stocks_news_dict):
     return stocks
 
 
+def zacks_to_score(score):
+    if(score == 1 or score ==2): return 1
+    if(score == 3): return 0
+    if(score == 4 or score == 5): return -1
 
 
-Sectors()
+# SectorsSentiment()
