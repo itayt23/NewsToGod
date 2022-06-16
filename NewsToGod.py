@@ -72,8 +72,8 @@ def process_user_input():
             window["-PROG-"].UpdateBar(2)
             done = True
         if(done):
-            print(f"{prog} was finish successfully! =)")
-            print(f"Total runtime of the program was {round((time.time() - start_time)/60, 2)} minutes")
+            print(f"{prog} program was finish successfully! =)")
+            # print(f"Total runtime of the program was {round((time.time() - start_time)/60, 2)} minutes")
             done = False
             begin = False
         event, values = window.read()
