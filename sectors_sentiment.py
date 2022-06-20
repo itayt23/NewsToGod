@@ -98,7 +98,7 @@ class SectorsSentiment:
             add_technical_data(sector_1d, sector_1wk, sector_1mo)
             run(self,sector_1d, sector_1wk, sector_1mo, sector)
             print(f'FINISH ANALYSE {sector} | TOTAL RUN TIME: {round((time.time() - start_run_time)/60, 2)} minutes')
-        self.sector_df.to_csv(results_path / f"Sectors final sentiment.csv")
+        self.sector_df.to_csv(results_path / f"Sectors final sentiment {date.today()}.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)} minutes')
       
     def get_sentiment_number(self):
@@ -999,6 +999,5 @@ def zacks_to_score(score):
     if(score == 1 or score ==2): return 1
     if(score == 3): return 0
     if(score == 4 or score == 5): return -1
-
 
 # SectorsSentiment()
