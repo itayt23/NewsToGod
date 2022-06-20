@@ -3,6 +3,7 @@ from timeit import timeit
 from tracemalloc import start
 from typing import Counter
 from numpy import sinc
+from pyrsistent import s
 import requests
 import json
 from dotenv import load_dotenv
@@ -51,8 +52,8 @@ zacks_properties = 1
 cut = 0
 articles_properties = 1 # TODO: need to change it after dealing with articles
 articles_score = 0
-news_score = 0
-news_properties = 1
+news_score = {}
+news_properties = {} #TODO: was 1 
 total_scores = 0
 total_properties = 0
 daily_scores = 0
@@ -90,6 +91,8 @@ class SectorsSentiment:
         self.utilities_sentiment = 0
         self.real_estate_sentiment = 0
         for sector in sectors:
+            news_score[sector] = 0
+            news_properties[sector] = 1
             sector_1d, sector_1wk, sector_1mo = download_symbol_data(sector)
             sector_1d, sector_1wk, sector_1mo = clean_df_nans(sector_1d, sector_1wk, sector_1mo)
             add_technical_data(sector_1d, sector_1wk, sector_1mo)
@@ -170,11 +173,11 @@ def run(self,sector_1d, sector_1wk, sector_1mo,sector):
         sector_1mo.drop(sector_1mo.tail(1).index,inplace = True)
         month = sector_1mo.loc[sector_1mo.index[-1]]["Date"].date().month
     zacks_score = run_zacks_rank(sector)
-    # run_market_news_processor(start_date_news, stop_date)
+    run_sectors_news_processor(start_date_news, stop_date,sector)
     # run_articles_news_processor(start_date_news, stop_date)
-    total_scores = daily_scores + weekly_scores + monthly_scores + articles_score + news_score + zacks_score
-    total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties + news_properties + zacks_properties
-    self.sector_df.loc[sector, 'News Sentiment'] = score_to_sentiment(news_score/news_properties)
+    total_scores = daily_scores + weekly_scores + monthly_scores + articles_score + news_score[sector] + zacks_score
+    total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties + news_properties[sector] + zacks_properties
+    self.sector_df.loc[sector, 'News Sentiment'] = score_to_sentiment(news_score[sector]/news_properties[sector])
     self.sector_df.loc[sector, 'Article Sentiment'] = score_to_sentiment(articles_score/articles_properties)
     self.sector_df.loc[sector, 'Zacks Rank'] = zacks_to_sentiment(zacks_score)
     self.sector_df.loc[sector, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
@@ -196,8 +199,6 @@ def run(self,sector_1d, sector_1wk, sector_1mo,sector):
     weekly_properties = 0
     articles_score = 0
     articles_properties = 1
-    news_score = 0
-    news_properties = 1
     zacks_score = 0
     cut = 0
     # self.sector_df.to_csv(results_path / f"final_sentiment_spy.csv")
@@ -886,20 +887,21 @@ def articles_sentiment(start_date, stop_date):
             print(f'EXCEPTION was accured during network connection trying get articles, DETAILS: {e}')
     return articles
 
-def run_market_news_processor(start_date, stop_date):
+def run_sectors_news_processor(start_date, stop_date,sector):
     market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
     date = datetime.now().strftime("%d.%m.%Y-%I.%M")
-    results_path = Path.cwd() / 'Results' / 'csv_files' /'Market news'
+    results_path = Path.cwd() / 'Results' / 'csv_files' /'Sectors news' / sector
     if not results_path.exists():
         results_path.mkdir(parents=True)
-    news_data = get_news_dict(start_date, stop_date)
-    market_news_sentiment_df = news_extractor(news_data, start_date)
+    news_data = get_news_dict(start_date, stop_date,sector)
+    if(news_data == 0): return
+    market_news_sentiment_df = news_extractor(news_data, start_date, sector)
     try:       
-        market_news_sentiment_df.to_csv(results_path / f"market_news_sentiment_{date}.csv")
+        market_news_sentiment_df.to_csv(results_path / f"{sector} news sentiment {date}.csv")
     except Exception:
         print(f"Problem was accured while saving the market news csv file, Details: \n {traceback.format_exc()}")
 
-def news_extractor(news_data, date):
+def news_extractor(news_data, date, sector):
     global news_score
     market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
     stocks_news_dict = {}
@@ -914,7 +916,7 @@ def news_extractor(news_data, date):
             url = str(url).replace('"',"")
             content = clean_content(content)
             score = sentiment_score(content)
-            news_score += score
+            news_score[sector] += score
             new_row['HeadLine'] = title
             new_row['Sentiment'] = score
             new_row['Date'] = date_time
@@ -922,7 +924,7 @@ def news_extractor(news_data, date):
             market_news_sentiment_df = market_news_sentiment_df.append(new_row, ignore_index=True)
             stocks_news_dict.clear()
             new_row.clear()
-            print(f'Finish analyse {counter} news at week {date} | TOTAL RUN TIME: {round((time.time() - start_run_time)/60, 2)} minutes')
+            print(f'Finish analyse {counter} news in sector {sector} at week {date} | TOTAL RUN TIME: {round((time.time() - start_run_time)/60, 2)} minutes')
             counter += 1
         except Exception as e:
             print(f"f'Problem accured in NEW No.{counter}, Error details: {e}")
@@ -932,18 +934,20 @@ def news_extractor(news_data, date):
     return market_news_sentiment_df
 
 
-def get_news_dict(start_date, stop_date):    
+def get_news_dict(start_date, stop_date,sector):    
     global news_properties
     news = {}
     stop = False
     start_date += timedelta(days=1)
     start_date = datetime.strptime(f'{start_date} 06:59:59', '%Y-%m-%d %H:%M:%S')
     since_timestamp = int(start_date.timestamp())
-    # until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
+    category = sector_to_category(sector)
+    if(category == "None"): return 0
+    category = []
     url = "https://seeking-alpha.p.rapidapi.com/news/v2/list"
-    for page in range(0,8):
+    for page in range(0,20):
         if(stop): break
-        querystring = {"until":since_timestamp,"since":"0","size":"40","number":page,"category":"market-news::us-economy"}
+        querystring = {"until":since_timestamp,"since":"0","size":"40","number":page,"category":category}
         try:
             news_data = requests.request("GET", url, headers=headers, params=querystring)
             news_data = json.loads(news_data.text)
@@ -956,12 +960,30 @@ def get_news_dict(start_date, stop_date):
                 if(stop_date >= date_t.date()) : stop = True
                 elif(stop == False):
                     news[date] = new
-                    news_properties += 1
+                    news_properties[sector] += 1
         except Exception as e:
             print(f'EXCEPTION was accured during network connection trying get News, DETAILS: {e}')
     return news
+    
 
-
+def sector_to_category(sector):
+    # "market-news::mlps"
+    if(sector == 'XLK'):
+        return "market-news::technology"
+    elif(sector == "XLV"):
+        return "market-news::healthcare"
+    elif(sector == "XLF"):
+        return "market-news::financials"
+    elif(sector == "XLE"):
+        return "market-news::energy"
+    elif(sector == "XLP" or sector == "XLY" or sector == "XLC"):
+        return "market-news::consumer"
+    elif(sector == "XLRE"):
+        return "market-news::reits"
+    elif(sector == "XLB"):
+        return "market-news::commodities"
+    else:
+        return "None"
 
 def concat_stocks(stocks_news_dict):
     stocks = ""
