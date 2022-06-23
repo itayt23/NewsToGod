@@ -27,6 +27,7 @@ import pymannkendall as mk
 import traceback
 import subprocess
 
+
 # sector_1d.to_csv("sector_1d.csv")
 # sector_1wk.to_csv("sector_1wk.csv")
 # sector_1mo.to_csv("sector_1mo.csv")
@@ -68,7 +69,7 @@ monthly_properties = 0
         # sector_1mo.to_csv("sector_1mo.csv")
 class SectorsSentiment:   
     def __init__(self):
-        global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
+        global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties, tech_temp
         results_path = Path.cwd() / 'Results' / 'csv_files' / 'Sectors'  
         if not results_path.exists():
             results_path.mkdir(parents=True)
@@ -173,7 +174,9 @@ def run(self,sector_1d, sector_1wk, sector_1mo,sector):
         sector_1mo.drop(sector_1mo.tail(1).index,inplace = True)
         month = sector_1mo.loc[sector_1mo.index[-1]]["Date"].date().month
     zacks_score = run_zacks_rank(sector)
-    run_sectors_news_processor(start_date_news, stop_date,sector)
+    run_sectors_news_processor(start_date_news, stop_date, sector)
+    
+    # run_sectors_news_processor(start_date_news, stop_date,sector)
     # run_articles_news_processor(start_date_news, stop_date)
     total_scores = daily_scores + weekly_scores + monthly_scores + articles_score + news_score[sector] + zacks_score
     total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties + news_properties[sector] + zacks_properties
@@ -943,7 +946,6 @@ def get_news_dict(start_date, stop_date,sector):
     since_timestamp = int(start_date.timestamp())
     category = sector_to_category(sector)
     if(category == "None"): return 0
-    category = []
     url = "https://seeking-alpha.p.rapidapi.com/news/v2/list"
     for page in range(0,20):
         if(stop): break
@@ -1000,4 +1002,101 @@ def zacks_to_score(score):
     if(score == 3): return 0
     if(score == 4 or score == 5): return -1
 
+
+
+
+
+def run_sectors_news_processor2(start_date, stop_date):
+    sectors = ['XLB','XLC','XLY','XLP','XLE','XLF','XLV','XLI','XLK','XLU','XLRE']
+    market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
+    # date = datetime.now().strftime("%d.%m.%Y-%I.%M")
+    # results_path = Path.cwd() / 'Results' / 'csv_files' /'Sectors news' / sector #! need to wwrite code for resualt path
+    # if not results_path.exists():
+    #     results_path.mkdir(parents=True)
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        all_news = executor.map(get_news_dict2,sectors)
+        executor.shutdown(wait=True)
+        print("ALL THE NEWS IS!: ")
+        print(all_news)
+    for news in all_news:
+        print("SINGLE NEWS IS: ")
+        print(news)
+        # articles[count] = article
+    # articles_week_analyzer(articles,start_date)
+    # market_news_sentiment_df = news_extractor2(news_data, start_date, sector)
+    # try:       
+    #     market_news_sentiment_df.to_csv(results_path / f"{sector} news sentiment {date}.csv")
+    # except Exception:
+    #     print(f"Problem was accured while saving the market news csv file, Details: \n {traceback.format_exc()}")
+
+def news_extractor2(news_data, date, sector):
+    global news_score
+    market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
+    stocks_news_dict = {}
+    new_row = {}
+    counter = 1
+    for key, new in news_data.items():
+        try:
+            title = new['attributes']['title']
+            date_time = new['attributes']['publishOn']
+            content = new['attributes']['content']
+            url = new['links']['canonical']
+            url = str(url).replace('"',"")
+            content = clean_content(content)
+            score = sentiment_score(content)
+            news_score[sector] += score
+            new_row['HeadLine'] = title
+            new_row['Sentiment'] = score
+            new_row['Date'] = date_time
+            new_row["URL"] = url
+            market_news_sentiment_df = market_news_sentiment_df.append(new_row, ignore_index=True)
+            stocks_news_dict.clear()
+            new_row.clear()
+            print(f'Finish analyse {counter} news in sector {sector} at week {date} | TOTAL RUN TIME: {round((time.time() - start_run_time)/60, 2)} minutes')
+            counter += 1
+        except Exception as e:
+            print(f"f'Problem accured in NEW No.{counter}, Error details: {e}")
+            stocks_news_dict.clear()
+            new_row.clear()
+            counter += 1
+    return market_news_sentiment_df
+
+
+def get_news_dict2(sector):    
+    global news_properties, sector_1dd, sector_1wkk, sector_1moo
+    news = {}
+    stop = False
+    start_date = date.today()
+    stop_date = sector_1wkk.loc[sector_1wkk.index[-1]]["Date"].date() - timedelta(days=3)
+    start_date += timedelta(days=1)
+    start_date = datetime.strptime(f'{start_date} 06:59:59', '%Y-%m-%d %H:%M:%S')
+    since_timestamp = int(start_date.timestamp())
+    category = sector_to_category(sector)
+    if(category == "None"): return 0
+    url = "https://seeking-alpha.p.rapidapi.com/news/v2/list"
+    for page in range(0,1):
+        if(stop): break
+        querystring = {"until":since_timestamp,"since":"0","size":"40","number":page,"category":category}
+        try:
+            news_data = requests.request("GET", url, headers=headers, params=querystring)
+            news_data = json.loads(news_data.text)
+            news_data = news_data['data']
+            for new in news_data:
+                new_date = new['attributes']['publishOn']
+                new_date = new_date.replace('T'," ")
+                new_date =  new_date[:-6]
+                date_t = datetime.strptime(new_date, '%Y-%m-%d %H:%M:%S')
+                if(stop_date >= date_t.date()) : stop = True
+                elif(stop == False):
+                    news[f"{sector} {new_date}"] = new
+                    news_properties[sector] += 1
+        except Exception as e:
+            print(f'EXCEPTION was accured during network connection trying get News, DETAILS: {e}')
+    return news
+    
+
+
+# sector_1dd, sector_1wkk, sector_1moo = download_symbol_data("XLK")
+# sector_1dd, sector_1wkk, sector_1moo = clean_df_nans(sector_1dd, sector_1wkk, sector_1moo)
+# add_technical_data(sector_1dd, sector_1wkk, sector_1moo)
 # SectorsSentiment()

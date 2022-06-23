@@ -171,30 +171,47 @@ def fetch(id):
 
 
 
-market_1d = pd.read_csv("market_1d.csv")
-market_1wk = pd.read_csv("market_1wk.csv")
-market_1mo = pd.read_csv("market_1mo.csv")
-start_date = datetime.strptime('2022-05-17 06:59:59', '%Y-%m-%d %H:%M:%S')
-stop_date = datetime.strptime('2022-05-14 06:59:59', '%Y-%m-%d %H:%M:%S')
-sector = yf.download("xlre",interval="1d",period="1y")
-print(sector)
+# market_1d = pd.read_csv("market_1d.csv")
+# market_1wk = pd.read_csv("market_1wk.csv")
+# market_1mo = pd.read_csv("market_1mo.csv")
+# start_date = datetime.strptime('2022-05-17 06:59:59', '%Y-%m-%d %H:%M:%S')
+# stop_date = datetime.strptime('2022-05-14 06:59:59', '%Y-%m-%d %H:%M:%S')
+# sector = yf.download("xlre",interval="1d",period="1y")
+# print(sector)
 
 
-articles_id = articles_sentiment(start_date, stop_date)
-count = 0
-with ThreadPoolExecutor(max_workers=6) as executor:
-    articlesss = executor.map(fetch, articles_id)
-    executor.shutdown(wait=True)
-for article in articlesss:
-    articles[count] = article
-    count += 1
+# articles_id = articles_sentiment(start_date, stop_date)
+# count = 0
+# with ThreadPoolExecutor(max_workers=6) as executor:
+#     articlesss = executor.map(fetch, articles_id)
+#     executor.shutdown(wait=True)
+# for article in articlesss:
+#     articles[count] = article
+#     count += 1
 
 
-articles_week_analyzer(articles)
+# articles_week_analyzer(articles)
             
 
 
 
+url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
+
+querystring = {"until":"0","since":"0","size":"20","number":"1","category":"gold-and-precious-metals"}
+
+headers = {
+	"X-RapidAPI-Key": "cc6a8d8228mshafc0d4b0ccd770ap1b399cjsna358d8033ba0",
+	"X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com"
+}
+
+articles =[]
+response = requests.request("GET", url, headers=headers, params=querystring)
+response = json.loads(response.text)
+articels_list = response['data']
+for article_id in articels_list:
+    articles.append(article_id['id'])
+print(articles)
+print('blalblablab')
 
 
 
