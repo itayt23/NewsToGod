@@ -13,18 +13,25 @@ import threading
 
 layout = Layout()
 window = layout.setWindow(layout.getMainLayout())
-begin = False
-done = False
+working = False
 prog = "None"
 
 # window.close()
 # window = sg.Window('Caller Finder',layout.getWhatsAppLayout(), size=(750,350),element_justification='c')
 
 def run_market_sentiment():
-    MarketSentiment()
+    global working
+    market = MarketSentiment()
+    window["-PROG-"].UpdateBar(2)
+    working = False
+    print(f"{prog} program was finish successfully! =)")
 
 def run_sectors_sentiment():
-    SectorsSentiment()
+    global working
+    sectors = SectorsSentiment()
+    window["-PROG-"].UpdateBar(2)
+    working = False
+    print(f"{prog} program was finish successfully! =)")
 
 def run_news_processor(news_num):
     news = SentimentProcessor(news_num)
@@ -53,29 +60,22 @@ def window_ui():
             sys.exit()
 
 def process_user_input():
-    global begin, done, window, prog
+    global window, prog, working
     start_time = time.time()
     event, values = window.read()
     while not (event == sg.WIN_CLOSED or event=="Exit"):
         if event == "Get Markets Sentiment":
-            prog = "Market Sentiment"
-            begin = True
-            window["-PROG-"].UpdateBar(1)
-            market = MarketSentiment()
-            window["-PROG-"].UpdateBar(2)
-            done = True
+            if not working:
+                working = True
+                prog = "Markets Sentiment"
+                window["-PROG-"].UpdateBar(1)
+                window.perform_long_operation(run_market_sentiment, '-OPERATION DONE-')
         if event == "Get Sectors Sentiment":
-            prog = "Sectors Sentiment"
-            begin = True
-            window["-PROG-"].UpdateBar(1)
-            sectors = SectorsSentiment()
-            window["-PROG-"].UpdateBar(2)
-            done = True
-        if(done):
-            print(f"{prog} program was finish successfully! =)")
-            # print(f"Total runtime of the program was {round((time.time() - start_time)/60, 2)} minutes")
-            done = False
-            begin = False
+            if not working:
+                working = True
+                prog = "Sectors Sentiment"
+                window["-PROG-"].UpdateBar(1)
+                window.perform_long_operation(run_sectors_sentiment, '-OPERATION DONE-')
         event, values = window.read()
     window.close()
     sys.exit()
