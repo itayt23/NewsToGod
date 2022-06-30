@@ -24,9 +24,9 @@ def run_market_sentiment():
     bar_thread = threading.Thread(target=update_progrees_bar, args=("markets",))
     bar_thread.start()
     market = MarketSentiment()
+    working = False
     bar_thread.join()
     window["-PROG-"].UpdateBar(MAX_PROG_BAR)
-    working = False
     print(f"program was finish successfully! =)")
 
 def run_sectors_sentiment():
@@ -34,9 +34,9 @@ def run_sectors_sentiment():
     bar_thread = threading.Thread(target=update_progrees_bar)
     bar_thread.start()
     sectors = SectorsSentiment()
+    working = False
     bar_thread.join()
     window["-PROG-"].UpdateBar(MAX_PROG_BAR)
-    working = False
     print(f"program was finish successfully! =)")
 
 def run_news_processor(news_num):
@@ -70,28 +70,45 @@ def get_sectors_sentiment():
         window.perform_long_operation(run_sectors_sentiment, '-OPERATION DONE-')
     else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
 
+def connect_trade_station():
+    global window, working
+    if not working:
+        working = True
+        window["-PROG-"].UpdateBar(1)
+        window.perform_long_operation(make_connection, '-OPERATION DONE-')
+    else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
+
+def make_connection():
+    global working
+    bar_thread = threading.Thread(target=update_progrees_bar, args=("ts",))
+    bar_thread.start()
+    asyncio.run(run_connection())
+    working = False
+    bar_thread.join()
+    window["-PROG-"].UpdateBar(MAX_PROG_BAR)
+    print(f"TradeStation connection successfully =)")
+
+async def run_connection():
+    ctx = Context()
+    await ctx.initialize()
+
 def process_user_input():
     global window, working
     start_time = time.time()
     event, values = window.read()
     while not (event == sg.WIN_CLOSED or event=="Exit"):
         if event == "Get Markets Sentiment":
-           get_markets_sentiment()
+            get_markets_sentiment()
         if event == "Get Sectors Sentiment":
-           get_sectors_sentiment()
-        
+            get_sectors_sentiment()
+        if event == "Make TradeStation Connection":
+            connect_trade_station()
         event, values = window.read()
     window.close()
     sys.exit()
-    
-async def make_connection():
-    ctx = Context()
-    await ctx.initialize()
-
 
 
 if __name__ == '__main__':
-    # asyncio.run(make_connection())
     process_user_input()
 
 
