@@ -15,22 +15,23 @@ MAX_PROG_BAR = 1000
 layout = Layout()
 window = layout.setWindow(layout.getMainLayout())
 working = False
+sectors = markets = "None"
 
 # window.close()
 # window = sg.Window('Caller Finder',layout.getWhatsAppLayout(), size=(750,350),element_justification='c')
 
 def run_market_sentiment():
-    global working
+    global working, markets
     bar_thread = threading.Thread(target=update_progrees_bar, args=("markets",))
     bar_thread.start()
-    market = MarketSentiment()
+    markets = MarketSentiment()
     working = False
     bar_thread.join()
     window["-PROG-"].UpdateBar(MAX_PROG_BAR)
     print(f"program was finish successfully! =)")
 
 def run_sectors_sentiment():
-    global working
+    global working, sectors
     bar_thread = threading.Thread(target=update_progrees_bar)
     bar_thread.start()
     sectors = SectorsSentiment()
@@ -71,7 +72,8 @@ def get_sectors_sentiment():
     else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
 
 def connect_trade_station():
-    global window, working
+    global window, working, sectors, markets
+
     if not working:
         working = True
         window["-PROG-"].UpdateBar(1)
@@ -86,7 +88,7 @@ def make_connection():
     working = False
     bar_thread.join()
     window["-PROG-"].UpdateBar(MAX_PROG_BAR)
-    print(f"TradeStation connection successfully =)")
+    print(f"TradeStation connected successfully =)")
 
 async def run_connection():
     ctx = Context()
@@ -101,7 +103,12 @@ def process_user_input():
             get_markets_sentiment()
         if event == "Get Sectors Sentiment":
             get_sectors_sentiment()
-        if event == "Make TradeStation Connection":
+        if event == "TradeStation":
+            if sectors != "None" and markets != "None":
+                window.close()
+                window = layout.setWindow(layout.get_tradestation_layout())
+            else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
+        if event == "Make Connection":
             connect_trade_station()
         event, values = window.read()
     window.close()
