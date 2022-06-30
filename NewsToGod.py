@@ -3,6 +3,7 @@ from ast import arg
 from itertools import count
 import sys
 from xml.dom.expatbuilder import theDOMImplementation
+
 from sectors_sentiment import SectorsSentiment
 from sentimentprocessor import SentimentProcessor
 from market_sentiment import MarketSentiment
@@ -11,6 +12,8 @@ from window import Layout
 import PySimpleGUI as sg
 import threading
 
+
+MAX_PROG_BAR = 1000
 layout = Layout()
 window = layout.setWindow(layout.getMainLayout())
 working = False
@@ -21,15 +24,21 @@ prog = "None"
 
 def run_market_sentiment():
     global working
+    bar_thread = threading.Thread(target=update_progrees_bar, args=("markets",), daemon=True)
+    bar_thread.start()
     market = MarketSentiment()
-    window["-PROG-"].UpdateBar(2)
+    bar_thread.join()
+    window["-PROG-"].UpdateBar(MAX_PROG_BAR)
     working = False
     print(f"{prog} program was finish successfully! =)")
 
 def run_sectors_sentiment():
     global working
+    bar_thread = threading.Thread(target=update_progrees_bar,daemon=True)
+    bar_thread.start()
     sectors = SectorsSentiment()
-    window["-PROG-"].UpdateBar(2)
+    bar_thread.join()
+    window["-PROG-"].UpdateBar(MAX_PROG_BAR)
     working = False
     print(f"{prog} program was finish successfully! =)")
 
@@ -39,15 +48,14 @@ def run_news_processor(news_num):
     # news.run_news_processor()
     # news.plot_news()
 
-def update_progrees_bar():
-    global done, window
-    while(done == False):
-        counter = 0
-        while(counter < 1000 and begin):
-            time.sleep(1)
-            counter += 1
-            window["-PROG-"].UpdateBar(counter)
-    sys.exit()
+
+def update_progrees_bar(kind='sectors'):
+    global working, window
+    counter = 2
+    while(counter < 990 and working):
+        time.sleep(1.5)
+        counter= counter + 1 if kind == "sectors" else counter + 5 
+        window["-PROG-"].UpdateBar(counter)
 
 def window_ui():
     global begin, done, window
