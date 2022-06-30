@@ -66,14 +66,14 @@ def process_user_input():
                 prog = "Markets Sentiment"
                 window["-PROG-"].UpdateBar(1)
                 window.perform_long_operation(run_market_sentiment, '-OPERATION DONE-')
-            else: sg.popup_quick("Running other program right now\n Please wait until finish running the program",auto_close_duration=5)
+            else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
         if event == "Get Sectors Sentiment":
             if not working:
                 working = True
                 prog = "Sectors Sentiment"
                 window["-PROG-"].UpdateBar(1)
                 window.perform_long_operation(run_sectors_sentiment, '-OPERATION DONE-')
-            else: sg.popup_quick("Running other program right now\n Please wait until finish running the program",auto_close_duration=5)
+            else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
         event, values = window.read()
     window.close()
     sys.exit()
