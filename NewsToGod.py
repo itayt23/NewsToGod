@@ -50,9 +50,9 @@ def run_news_processor(news_num):
 def update_progrees_bar(kind='sectors'):
     global working, window
     counter = 2
-    while(counter < 990 and working):
+    while(counter < 970 and working):
         time.sleep(1.5)
-        counter= counter + 1 if kind == "sectors" else counter + 5 
+        counter= counter + 1 if kind == "sectors" else counter + 4
         window["-PROG-"].UpdateBar(counter)
 
 def get_markets_sentiment():
@@ -95,7 +95,7 @@ async def run_connection():
     await ctx.initialize()
 
 def process_user_input():
-    global window, working
+    global window, working, sectors, markets
     start_time = time.time()
     event, values = window.read()
     while not (event == sg.WIN_CLOSED or event=="Exit"):
@@ -109,6 +109,8 @@ def process_user_input():
                 window = layout.setWindow(layout.get_tradestation_layout())
             else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
         if event == "Make Connection":
+            print(f'sectors sentiment is : {sectors.get_sentiment()}')
+            print(f'markets sentioment is : {markets.get_sentiment()}')
             connect_trade_station()
         event, values = window.read()
     window.close()
