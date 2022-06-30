@@ -1,9 +1,7 @@
 
-from ast import arg
-from itertools import count
 import sys
-from xml.dom.expatbuilder import theDOMImplementation
-
+import asyncio
+from api_context import Context
 from sectors_sentiment import SectorsSentiment
 from sentimentprocessor import SentimentProcessor
 from market_sentiment import MarketSentiment
@@ -57,16 +55,6 @@ def update_progrees_bar(kind='sectors'):
         counter= counter + 1 if kind == "sectors" else counter + 5 
         window["-PROG-"].UpdateBar(counter)
 
-def window_ui():
-    global begin, done, window
-    while(done == False):
-        if(begin):
-            event, values = window.read()
-            while not (event == sg.WIN_CLOSED or event=="Exit"):
-                event, values = window.read()
-            window.close()
-            sys.exit()
-
 def process_user_input():
     global window, prog, working
     start_time = time.time()
@@ -78,19 +66,26 @@ def process_user_input():
                 prog = "Markets Sentiment"
                 window["-PROG-"].UpdateBar(1)
                 window.perform_long_operation(run_market_sentiment, '-OPERATION DONE-')
+            else: sg.popup_quick("Running other program right now\n Please wait until finish running the program",auto_close_duration=5)
         if event == "Get Sectors Sentiment":
             if not working:
                 working = True
                 prog = "Sectors Sentiment"
                 window["-PROG-"].UpdateBar(1)
                 window.perform_long_operation(run_sectors_sentiment, '-OPERATION DONE-')
+            else: sg.popup_quick("Running other program right now\n Please wait until finish running the program",auto_close_duration=5)
         event, values = window.read()
     window.close()
     sys.exit()
     
+# async def make_connection():
+#     ctx = Context()
+# 	await ctx.initialize()
+
+
 
 if __name__ == '__main__':
-
+    # asyncio.run(make_connection())
     process_user_input()
 
 
