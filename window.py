@@ -1,3 +1,4 @@
+from turtle import pos
 import PySimpleGUI as sg
 MAX_PROG_BAR = 1000
 
@@ -16,12 +17,21 @@ class Layout:
         [sg.Output(key='-OUT1-', size=(100, 8))],
         [sg.Button("Exit",size=(8,1),font=('12'))]]
 
-        self.tradestation_layout = [[sg.T("")],
-        [sg.Text("Sectors Sentiment: "),sg.Text(key='-SECTORS_SENTIMENT-')],
-        [sg.Text("Markets Sentiment: "),sg.Text(key='-MARKETS_SENTIMENT-')],
-        [sg.Text("Account details: "),sg.Text(key='-ACCOUNT_DETAILS-')],
-        [sg.Button("Accept Order",font=('12')), sg.T("     ")],
-        [sg.T("")],
+        account_details_column = [
+        [sg.Button("Update Data",font=('12'))],
+        [sg.Text("Sectors Sentiment: "),sg.Text(text_color='white',key='-SECTORS_SENTIMENT-'),sg.Text("Markets Sentiment: "),sg.Text(text_color='white',key='-MARKETS_SENTIMENT-')],
+        [sg.Text("Account ID: "),sg.Text(text_color='white',key='-ACCOUNT_ID-')],
+        [sg.Text("Cash Balance: "),sg.Text(text_color='white',key='-ACCOUNT_CASH-')],
+        [sg.Text("Equity: "),sg.Text(text_color='white',key='-ACCOUNT_EQUITY-')],
+        ]
+
+        orders_column = [
+        [sg.Text("Symbol: "),sg.Text(text_color='white',key='-SYMBOL-')],
+        [sg.Text("Position: "),sg.Text(text_color='white',key='-POSITION-')],
+        [sg.Text("Order type: "),sg.Text(text_color='white',key='-ORDER_TYPE-')]]
+
+        self.tradestation_layout = [
+        [sg.Column(account_details_column,justification='left'),sg.VSeparator(pad=(200,0)),sg.Column(orders_column)],
         [sg.Output(key='-OUT1-', size=(200, 8))],
         [sg.Button("Exit",size=(8,1),font=('12'))]]             
 
@@ -31,6 +41,6 @@ class Layout:
     def get_tradestation_layout(self):
         return self.tradestation_layout
     
-    def setWindow(self, layout):
-        return sg.Window('NewsToGod',layout, size=(1000,500),element_justification='c')
+    def setWindow(self, layout,position='c'):
+        return sg.Window('NewsToGod',layout, size=(1000,500),element_justification=position)
     

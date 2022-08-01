@@ -15,6 +15,7 @@ from pathlib import Path
 import os.path
 from datetime import datetime, timedelta, date
 import requests
+import json
 
 
 MAX_PROG_BAR = 1000
@@ -108,8 +109,7 @@ def make_connection():
 async def run_connection():
     global ts_manager
     ts_manager = Context()
-    await ts_manager.initialize()
-    
+    await ts_manager.initialize()    
 
 def load_sectors_object():
     global sectors
@@ -177,6 +177,28 @@ def load_object(type):
         return 0
     return 0
 
+def update_ts_data():
+    global window, working
+    if not working:
+        working = True
+        window.perform_long_operation(get_account_details, '-OPERATION DONE-')
+    else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
+
+def get_account_details():
+    print("Getting Data...")
+    global sectors,markets,window,ts_manager,working
+    window['-SECTORS_SENTIMENT-'].update(sectors.get_sentiment())
+    window['-MARKETS_SENTIMENT-'].update(markets.get_sentiment())
+    url = "https://api.tradestation.com/v3/brokerage/accounts/11009370/balances"
+    headers = {"Authorization":f'Bearer {ts_manager.TOKENS.access_token}'}
+    account_details = requests.request("GET", url, headers=headers)
+    account_details = json.loads(account_details.text)
+    window['-ACCOUNT_ID-'].update(account_details['Balances'][0]['AccountID'])
+    window['-ACCOUNT_CASH-'].update(account_details['Balances'][0]['CashBalance'])
+    window['-ACCOUNT_EQUITY-'].update(account_details['Balances'][0]['Equity'])
+    working = False
+    print('Finish')
+
 def process_user_input():
     global window, working, sectors, markets, ts_connect,ts_manager
     start_time = time.time()
@@ -188,13 +210,6 @@ def process_user_input():
                 window.close()
                 window = layout.setWindow(layout.get_tradestation_layout())
                 first_connect = False
-                time.sleep(1.2)
-                print(f'sectors sentiment is : {sectors.get_sentiment()}')
-                print(f'markets sentioment is : {markets.get_sentiment()}')
-                url = "https://api.tradestation.com/v3/brokerage/accounts/61999124,68910124/balances"
-                headers = {"Authorization": ts_manager.TOKENS.access_token}
-                response = requests.request("GET", url, headers=headers)
-                print(response.text)
         if event == "Get Markets Sentiment":
             get_markets_sentiment()
         if event == "Get Sectors Sentiment":
@@ -207,6 +222,9 @@ def process_user_input():
             if sectors != "None" and markets != "None":
                 connect_trade_station()
             else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
+        if event == 'Update Data':
+            update_ts_data()
+
         event, values = window.read(timeout=100)
     window.close()
     sys.exit()
