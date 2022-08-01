@@ -8,6 +8,7 @@ class Layout:
         self.layout_main = [[sg.T("")],
         [sg.T("")],
         [sg.Button("Get Markets Sentiment",font=('11')), sg.T("     "),sg.Button("Get Sectors Sentiment",font=('11')), sg.T("     ")],
+        [sg.Button("Load Markets Sentiment",font=('11')), sg.T("     "),sg.Button("Load Sectors Sentiment",font=('11')), sg.T("     ")],
         [sg.T("")],
         [sg.Button("TradeStation",font=('16'))],
         [sg.T("")],
@@ -16,6 +17,7 @@ class Layout:
         [sg.Button("Exit",size=(8,1),font=('12'))]]
 
         self.tradestation_layout = [[sg.T("")],
+        [sg.T()],
         [sg.Button("Make Connection",font=('12')), sg.T("     ")],
         [sg.T("")],
         [sg.Text("Progress: ",font=('12')), sg.ProgressBar(max_value=2, orientation='h', size=(30,20), key="-PROG-",bar_color="gray")],

@@ -1,4 +1,3 @@
-
 import sys
 import asyncio
 from api_context import Context
@@ -9,6 +8,10 @@ import time
 from window import Layout
 import PySimpleGUI as sg
 import threading
+import pickle
+from pathlib import Path
+import os.path
+from datetime import datetime, timedelta, date
 
 
 MAX_PROG_BAR = 1000
@@ -16,6 +19,10 @@ layout = Layout()
 window = layout.setWindow(layout.getMainLayout())
 working = False
 sectors = markets = "None"
+# object_path = Path.cwd() / 'Results' / 'objects files' / 'Markets' 
+# object_path = str(object_path)
+# markets_file = open(object_path + f"/Markets_{date.today()}.obj","rb")
+# object_file = pickle.load(markets_file)
 
 # window.close()
 # window = sg.Window('Caller Finder',layout.getWhatsAppLayout(), size=(750,350),element_justification='c')
@@ -25,6 +32,7 @@ def run_market_sentiment():
     bar_thread = threading.Thread(target=update_progrees_bar, args=("markets",))
     bar_thread.start()
     markets = MarketSentiment()
+    save_object(markets,"markets")
     working = False
     bar_thread.join()
     window["-PROG-"].UpdateBar(MAX_PROG_BAR)
@@ -35,6 +43,7 @@ def run_sectors_sentiment():
     bar_thread = threading.Thread(target=update_progrees_bar)
     bar_thread.start()
     sectors = SectorsSentiment()
+    save_object(sectors,"sectors")
     working = False
     bar_thread.join()
     window["-PROG-"].UpdateBar(MAX_PROG_BAR)
@@ -52,7 +61,7 @@ def update_progrees_bar(kind='sectors'):
     counter = 2
     while(counter < 970 and working):
         time.sleep(1.5)
-        counter= counter + 1 if kind == "sectors" else counter + 4
+        counter= counter + 1 if kind == "sectors" else counter + 3
         window["-PROG-"].UpdateBar(counter)
 
 def get_markets_sentiment():
@@ -94,6 +103,72 @@ async def run_connection():
     ctx = Context()
     await ctx.initialize()
 
+def load_sectors_object():
+    global sectors
+    if(sectors != 'None'):
+        print("object already exist")
+        return
+    sectors = load_object("sectors")
+    if(sectors == 0):
+        print("Cannot load Sectors sentiment, PLEASE GET SECTORS SENTIMENT FIRST")
+    else:
+        print("LOAD sectors sentiment successfully :)")
+
+
+def load_markets_object():
+    global markets
+    if(markets != 'None'):
+        print("object already exist")
+        return
+    markets = load_object("markets")
+    if(markets == 0):
+        print("Cannot load Markets sentiment, PLEASE GET MARKETS SENTIMENT FIRST")
+    else:
+        print("LOAD sectors sentiment successfully :)")
+
+def save_object(object,type):
+    try:
+        if(type == "sectors"):
+            object_path = Path.cwd() / 'Results' / 'objects files' / 'Sectors'  
+            if not object_path.exists():
+                object_path.mkdir(parents=True)
+            object_path = str(object_path)
+            sectors_file = open(object_path + f"/Sectors_{date.today()}.obj_","wb")
+            pickle.dump(object,sectors_file)
+            sectors_file.close()
+        else:
+            object_path = Path.cwd() / 'Results' / 'objects files' / 'Markets'  
+            if not object_path.exists():
+                object_path.mkdir(parents=True)
+            object_path = str(object_path)
+            markets_file = open(object_path + f"/Markets_{date.today()}.obj","wb")
+            pickle.dump(object,markets_file)
+            markets_file.close()
+    except:
+        print("Problem with saving object")
+    
+def load_object(type):
+    try:
+        if(type == "sectors"):
+            object_path = Path.cwd() / 'Results' / 'objects files' / 'Sectors'  
+            object_path = str(object_path)
+            if(os.path.exists(object_path + f"/Sectors_{date.today()}.obj")):
+                sectors_file = open(object_path + f"/Sectors_{date.today()}.obj","rb")
+                object_file = pickle.load(sectors_file)
+                sectors_file.close()
+                return object_file
+        else:
+            object_path = Path.cwd() / 'Results' / 'objects files' / 'Markets' 
+            object_path = str(object_path)
+            if(os.path.exists(object_path + f"/Markets_{date.today()}.obj")):
+                markets_file = open(object_path + f"/Markets_{date.today()}.obj","rb")
+                object_file = pickle.load(markets_file)
+                markets_file.close()
+                return object_file
+    except:
+        return 0
+    return 0
+
 def process_user_input():
     global window, working, sectors, markets
     start_time = time.time()
@@ -103,6 +178,10 @@ def process_user_input():
             get_markets_sentiment()
         if event == "Get Sectors Sentiment":
             get_sectors_sentiment()
+        if event == "Load Sectors Sentiment":
+            load_sectors_object()
+        if event == "Load Markets Sentiment":
+            load_markets_object()
         if event == "TradeStation":
             if sectors != "None" and markets != "None":
                 window.close()

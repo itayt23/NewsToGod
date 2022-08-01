@@ -47,7 +47,7 @@ headers = {
 
 global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
 global cut, articles_score, articles_properties, news_score, news_properties, zacks_score, zacks_properties
-start_run_time = time.time()
+# start_run_time = time.time()
 zacks_score = 0 
 zacks_properties = 1
 cut = 0
@@ -70,6 +70,7 @@ monthly_properties = 0
 class SectorsSentiment:   
     def __init__(self):
         global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties, tech_temp
+        start_run_time = time.time()
         results_path = Path.cwd() / 'Results' / 'csv_files' / 'Sectors'  
         if not results_path.exists():
             results_path.mkdir(parents=True)
@@ -97,7 +98,7 @@ class SectorsSentiment:
             sector_1d, sector_1wk, sector_1mo = download_symbol_data(sector)
             sector_1d, sector_1wk, sector_1mo = clean_df_nans(sector_1d, sector_1wk, sector_1mo)
             add_technical_data(sector_1d, sector_1wk, sector_1mo)
-            run(self,sector_1d, sector_1wk, sector_1mo, sector)
+            run(self,sector_1d, sector_1wk, sector_1mo, sector,start_run_time)
             print(f'FINISH ANALYSE {sector} | TOTAL RUN TIME: {round((time.time() - start_run_time)/60, 2)} minutes')
         self.sector_df.to_csv(results_path / f"Sectors final sentiment {date.today()}.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)} minutes')
@@ -149,7 +150,7 @@ def add_technical_data(sector_1d, sector_1wk, sector_1mo):
     #     sector_1d.drop(sector_1d.tail(1).index,inplace = True)
     #     date_1d = sector_1d.loc[sector_1d.index[-1]]["Date"].date() 
 
-def run(self,sector_1d, sector_1wk, sector_1mo,sector):
+def run(self,sector_1d, sector_1wk, sector_1mo,sector,start_run_time):
     global total_scores, total_properties, daily_scores, daily_properties, weekly_scores, weekly_properties, monthly_scores, monthly_properties
     global cut, index, articles_score, articles_properties, news_score, news_properties,zacks_score,zacks_properties
     try:
@@ -174,7 +175,7 @@ def run(self,sector_1d, sector_1wk, sector_1mo,sector):
         sector_1mo.drop(sector_1mo.tail(1).index,inplace = True)
         month = sector_1mo.loc[sector_1mo.index[-1]]["Date"].date().month
     zacks_score = run_zacks_rank(sector)
-    run_sectors_news_processor(start_date_news, stop_date, sector)
+    run_sectors_news_processor(start_date_news, stop_date, sector,start_run_time)
     
     # run_sectors_news_processor(start_date_news, stop_date,sector)
     # run_articles_news_processor(start_date_news, stop_date)
@@ -794,7 +795,7 @@ def oscillators_extract_data(sector_1d, sector_1wk, sector_1mo):
         print(f"Problem was accured during extract OSCILLATORS data, Details: \n {traceback.format_exc()}")
 
 
-def articles_week_analyzer(articles, date):
+def articles_week_analyzer(articles, date,start_run_time):
     global articles_score
     counter = 1
     sum = 0
@@ -846,7 +847,7 @@ def get_all_articles(id):
         print(f'Problem at one of the articles ENCODING PROBLEM: {e}')
     return article
 
-def run_articles_news_processor(start_date, stop_date):
+def run_articles_news_processor(start_date, stop_date,start_run_time):
     articles = {}
     articles_id = articles_sentiment(start_date, stop_date)
     count = 0
@@ -856,7 +857,7 @@ def run_articles_news_processor(start_date, stop_date):
     for article in all_articles:
         articles[count] = article
         count += 1
-    articles_week_analyzer(articles,start_date)
+    articles_week_analyzer(articles,start_date,start_run_time)
 
 
 def articles_sentiment(start_date, stop_date):
@@ -890,7 +891,7 @@ def articles_sentiment(start_date, stop_date):
             print(f'EXCEPTION was accured during network connection trying get articles, DETAILS: {e}')
     return articles
 
-def run_sectors_news_processor(start_date, stop_date,sector):
+def run_sectors_news_processor(start_date, stop_date,sector,start_run_time):
     market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
     date = datetime.now().strftime("%d.%m.%Y-%I.%M")
     results_path = Path.cwd() / 'Results' / 'csv_files' /'Sectors news' / sector
@@ -898,13 +899,13 @@ def run_sectors_news_processor(start_date, stop_date,sector):
         results_path.mkdir(parents=True)
     news_data = get_news_dict(start_date, stop_date,sector)
     if(news_data == 0): return
-    market_news_sentiment_df = news_extractor(news_data, start_date, sector)
+    market_news_sentiment_df = news_extractor(news_data, start_date, sector,start_run_time)
     try:       
         market_news_sentiment_df.to_csv(results_path / f"{sector} news sentiment {date}.csv")
     except Exception:
         print(f"Problem was accured while saving the market news csv file, Details: \n {traceback.format_exc()}")
 
-def news_extractor(news_data, date, sector):
+def news_extractor(news_data, date, sector,start_run_time):
     global news_score
     market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
     stocks_news_dict = {}
@@ -1029,7 +1030,7 @@ def run_sectors_news_processor2(start_date, stop_date):
     # except Exception:
     #     print(f"Problem was accured while saving the market news csv file, Details: \n {traceback.format_exc()}")
 
-def news_extractor2(news_data, date, sector):
+def news_extractor2(news_data, date, sector,start_run_time):
     global news_score
     market_news_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
     stocks_news_dict = {}
