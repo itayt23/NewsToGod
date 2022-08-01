@@ -1,5 +1,7 @@
+from distutils.command.build_scripts import first_line_re
 import sys
 import asyncio
+from wsgiref.headers import tspecials
 from api_context import Context
 from sectors_sentiment import SectorsSentiment
 from sentimentprocessor import SentimentProcessor
@@ -12,6 +14,7 @@ import pickle
 from pathlib import Path
 import os.path
 from datetime import datetime, timedelta, date
+import requests
 
 
 MAX_PROG_BAR = 1000
@@ -19,6 +22,8 @@ layout = Layout()
 window = layout.setWindow(layout.getMainLayout())
 working = False
 sectors = markets = "None"
+ts_manager = 0
+ts_connect = False
 # object_path = Path.cwd() / 'Results' / 'objects files' / 'Markets' 
 # object_path = str(object_path)
 # markets_file = open(object_path + f"/Markets_{date.today()}.obj","rb")
@@ -82,7 +87,6 @@ def get_sectors_sentiment():
 
 def connect_trade_station():
     global window, working, sectors, markets
-
     if not working:
         working = True
         window["-PROG-"].UpdateBar(1)
@@ -90,7 +94,7 @@ def connect_trade_station():
     else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
 
 def make_connection():
-    global working
+    global working, window,ts_connect
     bar_thread = threading.Thread(target=update_progrees_bar, args=("ts",))
     bar_thread.start()
     asyncio.run(run_connection())
@@ -98,10 +102,14 @@ def make_connection():
     bar_thread.join()
     window["-PROG-"].UpdateBar(MAX_PROG_BAR)
     print(f"TradeStation connected successfully =)")
-
+    time.sleep(1)
+    ts_connect = True
+   
 async def run_connection():
-    ctx = Context()
-    await ctx.initialize()
+    global ts_manager
+    ts_manager = Context()
+    await ts_manager.initialize()
+    
 
 def load_sectors_object():
     global sectors
@@ -124,7 +132,7 @@ def load_markets_object():
     if(markets == 0):
         print("Cannot load Markets sentiment, PLEASE GET MARKETS SENTIMENT FIRST")
     else:
-        print("LOAD sectors sentiment successfully :)")
+        print("LOAD markets sentiment successfully :)")
 
 def save_object(object,type):
     try:
@@ -133,7 +141,7 @@ def save_object(object,type):
             if not object_path.exists():
                 object_path.mkdir(parents=True)
             object_path = str(object_path)
-            sectors_file = open(object_path + f"/Sectors_{date.today()}.obj_","wb")
+            sectors_file = open(object_path + f"/Sectors_{date.today()}.obj","wb")
             pickle.dump(object,sectors_file)
             sectors_file.close()
         else:
@@ -170,10 +178,23 @@ def load_object(type):
     return 0
 
 def process_user_input():
-    global window, working, sectors, markets
+    global window, working, sectors, markets, ts_connect,ts_manager
     start_time = time.time()
-    event, values = window.read()
+    first_connect = True
+    event, values = window.read(timeout=100)
     while not (event == sg.WIN_CLOSED or event=="Exit"):
+        if ts_connect and first_connect:
+            if first_connect:
+                window.close()
+                window = layout.setWindow(layout.get_tradestation_layout())
+                first_connect = False
+                time.sleep(1.2)
+                print(f'sectors sentiment is : {sectors.get_sentiment()}')
+                print(f'markets sentioment is : {markets.get_sentiment()}')
+                url = "https://api.tradestation.com/v3/brokerage/accounts/61999124,68910124/balances"
+                headers = {"Authorization": ts_manager.TOKENS.access_token}
+                response = requests.request("GET", url, headers=headers)
+                print(response.text)
         if event == "Get Markets Sentiment":
             get_markets_sentiment()
         if event == "Get Sectors Sentiment":
@@ -182,16 +203,11 @@ def process_user_input():
             load_sectors_object()
         if event == "Load Markets Sentiment":
             load_markets_object()
-        if event == "TradeStation":
+        if event == "Connect TradeStation":
             if sectors != "None" and markets != "None":
-                window.close()
-                window = layout.setWindow(layout.get_tradestation_layout())
+                connect_trade_station()
             else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
-        if event == "Make Connection":
-            print(f'sectors sentiment is : {sectors.get_sentiment()}')
-            print(f'markets sentioment is : {markets.get_sentiment()}')
-            connect_trade_station()
-        event, values = window.read()
+        event, values = window.read(timeout=100)
     window.close()
     sys.exit()
 
