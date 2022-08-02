@@ -37,17 +37,20 @@ class SequenceMethod:
         pass
     
     def plot_monthly_graph(self):
-        up_seq_x = up_seq_y = down_seq_x = down_seq_y = []
-        for i in range(len(self.sequence_1mo)):
-            if(self.sequence_1mo.loc[i, "Sequence"] == 1):
-                up_seq_x.append(self.sequence_1mo.loc[i, "Date"])
-                up_seq_y.append(self.sequence_1mo.loc[i, "Entry Price"])
+        up_seq_x = []
+        up_seq_y = []
+        down_seq_x = []
+        down_seq_y = []
+        for index,row in self.sequence_1mo.iterrows():
+            if(row["Sequence"] == 1):
+                up_seq_x.append(row["Date"])
+                up_seq_y.append(row["Entry Price"])
             else:
-                down_seq_x.append(self.sequence_1mo.loc[i, "Date"])
-                down_seq_y.append(self.sequence_1mo.loc[i, "Entry Price"])
+                down_seq_x.append(row["Date"])
+                down_seq_y.append(row["Entry Price"])
 
         plt.style.use('dark_background')
-
+        
         # convert into datetime object
         self.symbol_data_1mo['Date'] = pd.to_datetime(self.symbol_data_1mo['Date'])
 
@@ -71,15 +74,13 @@ class SequenceMethod:
         
         # setting title
         plt.title('Candelsticks')
-        plt.scatter(up_seq_x,up_seq_y,marker='^',facecolors='green',s=20)
-        plt.scatter(down_seq_x,down_seq_y,marker='v',facecolors='red',s=20)
-        # plt.plot(up_seq_x,up_seq_y,"ro", alpha=0.5, marker="^", markersize=4,facecolor='green')
-        
         # Formatting Date
         date_format = mpdates.DateFormatter('%d-%m-%Y')
         ax.xaxis.set_major_formatter(date_format)
         fig.autofmt_xdate()
         fig.tight_layout()
+        plt.scatter(up_seq_x,up_seq_y,marker='^',facecolors='green',s=20)
+        plt.scatter(down_seq_x,down_seq_y,marker='v',facecolors='red',s=20)
         plt.show()
 
 def build_sequences(self):
