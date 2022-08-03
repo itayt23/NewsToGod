@@ -54,14 +54,17 @@ class SequenceMethod:
             seq_df = self.sequence_1d
             symbol_df =  self.symbol_data_1d
             width = 1
+            size = 10 
         if(interval == 'week'):
             seq_df = self.sequence_1wk
             symbol_df =  self.symbol_data_1wk
             width = 2
+            size = 10 
         if(interval == 'month'):
             seq_df = self.sequence_1mo
             symbol_df =  self.symbol_data_1mo
-            width = 3
+            width = 4
+            size = 20 
         for index,row in seq_df.iterrows():
             if(row["Sequence"] == 1):
                 up_seq_x.append(row["Date"])
@@ -70,7 +73,11 @@ class SequenceMethod:
                 down_seq_x.append(row["Date"])
                 down_seq_y.append(row["Entry Price"])
 
-        plt.style.use('dark_background')
+        plt.style.use('seaborn-dark')
+        # plt.style.use('ggplot')
+        # plt.style.use('dark_background')
+        # plt.style.use('fivethirtyeight')
+        # plt.style.use('grayscale')
         
         # convert into datetime object
         symbol_df['Date'] = pd.to_datetime(symbol_df['Date'])
@@ -101,8 +108,8 @@ class SequenceMethod:
         ax.xaxis.set_major_formatter(date_format)
         fig.autofmt_xdate()
         fig.tight_layout()
-        plt.scatter(up_seq_x,up_seq_y,marker='^',facecolors='green',s=20)
-        plt.scatter(down_seq_x,down_seq_y,marker='v',facecolors='red',s=20)
+        plt.scatter(up_seq_x,up_seq_y,marker='^',facecolors='green',s=size)
+        plt.scatter(down_seq_x,down_seq_y,marker='v',facecolors='red',s=size)
         plt.show()
 
 def build_sequences(self):
@@ -206,8 +213,8 @@ def build_sequences(self):
 se = SequenceMethod('SPY')
 # se.plot_graph('day')
 # se.print_sequence_data('day')
-se.plot_graph('week')
 se.print_sequence_data('week')
-se.plot_graph('month')
+se.plot_graph('week')
 se.print_sequence_data('month')
+se.plot_graph('month')
 print('blala')

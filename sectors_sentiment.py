@@ -108,8 +108,19 @@ class SectorsSentiment:
 
     def get_sentiment(self):
         return score_to_sentiment(self.sentiment) 
-
-
+    
+    def print_all_sentiment(self):
+        print(f'XLB: {self.materials_sentiment}')
+        print(f'XLC: {self.communication_sentimennt}')
+        print(f'XLY: {self.consumer_discretionary_sentiment}')
+        print(f'XLP: {self.consumer_staples_sentiment}')
+        print(f'XLE: {self.energy_sentiment}')
+        print(f'XLF: {self.finance_sentiment}')
+        print(f'XLV: {self.healthcare_sentiment}')
+        print(f'XLI: {self.industrial_sentiment}')
+        print(f'XLK: {self.technology_sentiment}')
+        print(f'XLU: {self.utilities_sentiment}')
+        print(f'XLRE: {self.real_estate_sentiment}')
 def download_symbol_data(sector):
     try:
         sector_1d = yf.download(sector,period='5y',interval='1d')

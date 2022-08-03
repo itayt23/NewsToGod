@@ -189,7 +189,7 @@ def get_account_details():
     global sectors,markets,window,ts_manager,working
     window['-SECTORS_SENTIMENT-'].update(sectors.get_sentiment())
     window['-MARKETS_SENTIMENT-'].update(markets.get_sentiment())
-    url = "https://api.tradestation.com/v3/brokerage/accounts/11009370/balances"
+    url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
     headers = {"Authorization":f'Bearer {ts_manager.TOKENS.access_token}'}
     account_details = requests.request("GET", url, headers=headers)
     account_details = json.loads(account_details.text)
@@ -227,6 +227,7 @@ def process_user_input():
 
         event, values = window.read(timeout=100)
     window.close()
+    sectors.print_all_sentiment()
     sys.exit()
 
 
