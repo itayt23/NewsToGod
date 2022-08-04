@@ -13,7 +13,7 @@ from collections import Counter
 import statsmodels.api as sm
 
 
-#! plot regression
+# # ! plot regression
 # data_path = Path.cwd() / 'Results' / 'BackTesting' / 'Weights'
 # weights_df = pd.read_csv(data_path / "weights 1500.csv")
 # y = weights_df[["My Yield"]]
@@ -33,11 +33,12 @@ import statsmodels.api as sm
 # # x_articles = sm.add_constant(x_articles)
 
 # #fit linear regression model
-# model = sm.OLS(y,x_articles).fit()
+# model = sm.OLS(y,x).fit()
 
 # #view model summary
 # # sns.regplot(y="My Yield", x="Technical Weight", data=weights_df)
 # print(model.summary())
+# print('bla bla')
 
 #! news stats plot
 # data_path = Path.cwd() / 'Results' / 'csv_files' / 'all news'
