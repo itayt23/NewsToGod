@@ -34,6 +34,15 @@ class SequenceMethod:
         self.sequence_1mo = pd.DataFrame(columns=['Date', 'Entry Price', 'Sequence', 'Days', "Yield"])
         self.sequence_1d,self.sequence_1wk,self.sequence_1mo = build_sequences(self)
 
+    def get_month_rank(self):
+        return self.sequence_1mo['Sequence'].iloc[-1]
+    
+    def get_week_rank(self):
+        return self.sequence_1wk['Sequence'].iloc[-1]
+
+    def get_day_rank(self):
+        return self.sequence_1d['Sequence'].iloc[-1]
+
     def print_sequence_data(self,interval):
         if(interval == 'day'):
             print(self.sequence_1d)
@@ -210,11 +219,16 @@ def build_sequences(self):
 
 
    
-se = SequenceMethod('SPY')
+se = SequenceMethod('abt')
 # se.plot_graph('day')
 # se.print_sequence_data('day')
-se.print_sequence_data('week')
-se.plot_graph('week')
-se.print_sequence_data('month')
-se.plot_graph('month')
+
+print(se.get_day_rank())
+print(se.get_week_rank())
+print(se.get_month_rank())
+
+# se.print_sequence_data('week')
+# se.plot_graph('week')
+# se.print_sequence_data('month')
+# se.plot_graph('month')
 print('blala')

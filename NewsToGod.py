@@ -1,7 +1,10 @@
 from distutils.command.build_scripts import first_line_re
+from math import fabs
 import sys
 import asyncio
 from wsgiref.headers import tspecials
+
+from regex import F
 from api_context import Context
 from sectors_sentiment import SectorsSentiment
 from sentimentprocessor import SentimentProcessor
@@ -76,7 +79,7 @@ def get_markets_sentiment():
         working = True
         window["-PROG-"].UpdateBar(1)
         window.perform_long_operation(run_market_sentiment, '-OPERATION DONE-')
-    else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
+    else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
 
 def get_sectors_sentiment():
     global window, working
@@ -84,7 +87,7 @@ def get_sectors_sentiment():
         working = True
         window["-PROG-"].UpdateBar(1)
         window.perform_long_operation(run_sectors_sentiment, '-OPERATION DONE-')
-    else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
+    else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
 
 def connect_trade_station():
     global window, working, sectors, markets
@@ -92,7 +95,7 @@ def connect_trade_station():
         working = True
         window["-PROG-"].UpdateBar(1)
         window.perform_long_operation(make_connection, '-OPERATION DONE-')
-    else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
+    else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
 
 def make_connection():
     global working, window,ts_connect
@@ -112,28 +115,38 @@ async def run_connection():
     await ts_manager.initialize()    
 
 def load_sectors_object():
+    global working
     global sectors
-    if(sectors != 'None'):
-        print("object already exist")
-        return
-    sectors = load_object("sectors")
-    if(sectors == 0):
-        print("Cannot load Sectors sentiment, PLEASE GET SECTORS SENTIMENT FIRST")
-    else:
-        print("LOAD sectors sentiment successfully :)")
+    if not working:
+        working = True
+        if(sectors != 'None'):
+            print("object already exist")
+            return
+        sectors = load_object("sectors")
+        if(sectors == 0):
+            print("Cannot load Sectors sentiment, PLEASE GET SECTORS SENTIMENT FIRST")
+        else:
+            print("LOAD sectors sentiment successfully :)")
+    else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
+    working = False 
 
 
 def load_markets_object():
+    global working
     global markets
-    if(markets != 'None'):
-        print("object already exist")
-        return
-    markets = load_object("markets")
-    if(markets == 0):
-        print("Cannot load Markets sentiment, PLEASE GET MARKETS SENTIMENT FIRST")
-    else:
-        print("LOAD markets sentiment successfully :)")
-
+    if not working:
+        working = True  
+        if(markets != 'None'):
+            print("object already exist")
+            return
+        markets = load_object("markets")
+        if(markets == 0):
+            print("Cannot load Markets sentiment, PLEASE GET MARKETS SENTIMENT FIRST")
+        else:
+            print("LOAD markets sentiment successfully :)")
+    else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
+    working = False
+    
 def save_object(object,type):
     try:
         if(type == "sectors"):
@@ -182,7 +195,7 @@ def update_ts_data():
     if not working:
         working = True
         window.perform_long_operation(get_account_details, '-OPERATION DONE-')
-    else: sg.popup_quick_message("Running other program right now\nPlease wait until finish running the program",auto_close_duration=5)
+    else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
 
 def get_account_details():
     print("Getting Data...")
@@ -210,13 +223,13 @@ def process_user_input():
                 window.close()
                 window = layout.setWindow(layout.get_tradestation_layout())
                 first_connect = False
-        if event == "Get Markets Sentiment":
+        if event == "Get Recommendation":
             get_markets_sentiment()
         if event == "Get Sectors Sentiment":
             get_sectors_sentiment()
         if event == "Load Sectors Sentiment":
             load_sectors_object()
-        if event == "Load Markets Sentiment":
+        if event == "Load Markets Recommendation":
             load_markets_object()
         if event == "Connect TradeStation":
             # if (sectors != "None" or sectors != 0) and (markets != "None" or markets != 0):
@@ -239,15 +252,15 @@ if __name__ == '__main__':
     etfs_xlc = ['XLC','FIVG','IYZ','VR']
     etfs_xly = ['XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ''AWAY','SOCL','BFIT','KROP']
     etfs_xlp = ['XLP','FTXG','KXI','PBJ']
-    etfs_xle = ['XLE','XES','CNRG','PXI','FTXN','XOP','FCG','SOLR','ICLN','QCLN','EDOC','AGNG']
-    etfs_xlf = ['XLF','KIE','KBE','KCE','XRE']
-    etfs_xlv = ['XLV','FHLC','XHE','XHS','IHF','GNOM','HTEC','PPH','IXJ','IHE']
-    etfs_xli = ['XLI','XAR','XTN','PRN','EXI','AIRR','IFRA','TOLZ','IGF','SIMS','HYDR']
-    etfs_xlk = ['XLK','VGT','FTEC','IGM','XSD','HERO','FDN','IRBO','FINX','IHAK','BUG','CLOU','SNSR','AIQ','CTEC','RAY']
-    etfs_xlu = ['XLU','JXI','UTES','ECLN','RNRG','PUI','AQWA','WNDY']
-    etfs_xlre = ['XLRE','FREL','RWR','REET','VNQ','REZ','KBWY','SRET','SRVR','VPN','GRNR']
-    etfs_xlb = ['XLB','VAW','FMAT','PYZ','XME','HAP','MXI','IGE','MOO','FIW','WOOD','COPX','PHO','IYM','FXZ','URA','LIT','SIL']
-    etfs_extra = ['PBD','XT','ACES','DRIV','PBW','IPAY','FAN','ICLN','MJ','VCLN','POTX','HYDR','WNDY','MJUS','JETS','TOKE','BOTZ','OCEN','SPFF']
+    etfs_xle = ['XLE','XES','CNRG','FTXN','SOLR','ICLN']
+    etfs_xlf = ['XLF','KIE','KCE','KRE']
+    etfs_xlv = ['XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC']
+    etfs_xli = ['XLI','AIRR','IFRA','IGF','SIMS']
+    etfs_xlk = ['XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR']
+    etfs_xlu = ['XLU','RNRG','FIW','FAN']
+    etfs_xlre = ['XLRE','KBWY','SRVR','VPN','GRNR'] #VPN, GRNR
+    etfs_xlb = ['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
+    etfs_extra = ['PBD','XT','ACES','DRIV','PBW','IPAY','MJ','VCLN','POTX','HYDR','WNDY','MJUS','JETS','TOKE','BOTZ','OCEN','SPFF']
     
     process_user_input()
 

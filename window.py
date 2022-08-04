@@ -6,10 +6,13 @@ class Layout:
     def __init__(self):
         sg.theme("DarkPurple4") 
 
-        self.layout_main = [[sg.T("")],
+        self.layout_main = [
         [sg.T("")],
-        [sg.Button("Get Markets Sentiment",font=('11')), sg.T("     "),sg.Button("Get Sectors Sentiment",font=('11')), sg.T("     ")],
-        [sg.Button("Load Markets Sentiment",font=('11')), sg.T("     "),sg.Button("Load Sectors Sentiment",font=('11')), sg.T("     ")],
+        [sg.Button("Get Recommendation",font=('11')), sg.T("     "),sg.VSeparator(),sg.Text("recommendation: ",font=('13')),sg.Text(text_color='white',key='-RECOMMENDATION-'),sg.VSeparator()],
+        [sg.T("")],
+        [sg.T("")],
+        [sg.Button("Get Sectors Sentiment",font=('11')), sg.T("     ")],
+        [sg.Button("Load Markets Recommendation",font=('11')), sg.T("     "),sg.Button("Load Sectors Sentiment",font=('11')), sg.T("     ")],
         [sg.T("")],
         [sg.Button("Connect TradeStation",font=('16'))],
         [sg.T("")],
