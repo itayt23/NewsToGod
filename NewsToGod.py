@@ -55,7 +55,7 @@ def run_market_recommendation():
     print(f"program was finish successfully! =)")
 
 def get_recommendation(markets,sequence_spy,sequence_qqq):
-    sentiment = markets.get_sentiment_score()
+    sentiment = markets.get_sentiment_score() #More wheigt on sentiment
     seq_weekly_spy = sequence_spy.get_week_rank()
     seq_monthly_spy = sequence_spy.get_month_rank()
     seq_weekly_qqq = sequence_qqq.get_week_rank()
@@ -247,7 +247,7 @@ def get_account_details():
     print('Finish')
 
 def process_user_input():
-    global window, working, sectors, markets, ts_connect,ts_manager
+    global window, working, sectors, markets, ts_connect,ts_manager,sequence_qqq,sequence_spy
     start_time = time.time()
     first_connect = True
     event, values = window.read(timeout=100)
@@ -272,7 +272,13 @@ def process_user_input():
             else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
         if event == 'Update Data':
             update_ts_data()
-            sectors.print_all_sentiment()
+            # sectors.print_all_sentiment()
+            print(f"avg up trend at SPY daily is: {sequence_spy.get_avg_up_return('day')}")
+            print(f"avg up trend at SPY weekly is: {sequence_spy.get_avg_up_return('week')}")
+            print(f"avg up trend at SPY monthly is: {sequence_spy.get_avg_up_return('month')}")
+            print(f"avg up trend at QQQ daily is: {sequence_qqq.get_avg_up_return('day')}")
+            print(f"avg up trend at QQQ weekly is: {sequence_qqq.get_avg_up_return('week')}")
+            print(f"avg up trend at QQQ monthly is: {sequence_qqq.get_avg_up_return('month')}")
 
         event, values = window.read(timeout=100)
     window.close()

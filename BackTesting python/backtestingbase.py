@@ -1,8 +1,11 @@
 import numpy as np
 import pandas as pd
 from pylab import mpl, plt
+import yfinance as yf
+from sequencing import SequenceMethod
 plt.style.use('seaborn')
 mpl.rcParams['font.family'] = 'serif'
+
 
 
 class BacktestBase(object):
@@ -56,18 +59,28 @@ class BacktestBase(object):
         self.position = 0
         self.trades = 0
         self.verbose = verbose
+        self.stoploss = 0
+        self.entry_price = 0
+        self.sequence = SequenceMethod(self.symbol)
+        self.symbol_data_1d = pd.DataFrame()
+        self.symbol_data_1wk = pd.DataFrame()
+        self.symbol_data_1mo = pd.DataFrame()
+        
         self.get_data()
 
     def get_data(self):
         ''' Retrieves and prepares the data.
         '''
-        raw = pd.read_csv('http://hilpisch.com/pyalgo_eikon_eod_data.csv',
-                          index_col=0, parse_dates=True).dropna()
-        raw = pd.DataFrame(raw[self.symbol])
-        raw = raw.loc[self.start:self.end]
-        raw.rename(columns={self.symbol: 'price'}, inplace=True)
-        raw['return'] = np.log(raw / raw.shift(1))
-        self.data = raw.dropna()
+
+        self.symbol_data_1d = self.sequence.get_data_1d()
+        self.symbol_data_1d = self.symbol_data_1d.set_index('Date')
+        self.symbol_data_1wk = self.sequence.get_data_1wk()
+        self.symbol_data_1wk = self.symbol_data_1wk.set_index('Date')
+        self.symbol_data_1mo = self.sequence.get_data_1mo()
+        self.symbol_data_1mo = self.symbol_data_1mo.set_index('Date')
+        self.symbol_data_1d =  self.symbol_data_1d.loc[self.start:self.end]
+        self.symbol_data_1wk =  self.symbol_data_1wk.loc[self.start:self.end]
+        self.symbol_data_1mo =  self.symbol_data_1mo.loc[self.start:self.end]
 
     def plot_data(self, cols=None):
         ''' Plots the closing prices for symbol.
@@ -79,8 +92,8 @@ class BacktestBase(object):
     def get_date_price(self, bar):
         ''' Return date and price for bar.
         '''
-        date = str(self.data.index[bar])[:10]
-        price = self.data.price.iloc[bar]
+        date = str(self.symbol_data_1d.index[bar])[:10]
+        price = self.symbol_data_1d.Close.iloc[bar]
         return date, price
 
     def print_balance(self, bar):

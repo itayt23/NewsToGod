@@ -24,11 +24,11 @@ class SequenceMethod:
 
     def __init__(self,ticker):
         # load_dotenv("api.env")
-        self.symbol_data_1d = pd.DataFrame(yf.download(ticker, period='5y',interval='1d')).dropna()
+        self.symbol_data_1d = pd.DataFrame(yf.download(ticker, period='max',interval='1d')).dropna()
         self.symbol_data_1d = self.symbol_data_1d.rename_axis('Date').reset_index()
-        self.symbol_data_1wk = pd.DataFrame(yf.download(ticker, period='5y',interval='1wk')).dropna()
+        self.symbol_data_1wk = pd.DataFrame(yf.download(ticker, period='max',interval='1wk')).dropna()
         self.symbol_data_1wk = self.symbol_data_1wk.rename_axis('Date').reset_index()
-        self.symbol_data_1mo = pd.DataFrame(yf.download(ticker, period='10y',interval='1mo')).dropna()
+        self.symbol_data_1mo = pd.DataFrame(yf.download(ticker, period='max',interval='1mo')).dropna()
         self.symbol_data_1mo = self.symbol_data_1mo.rename_axis('Date').reset_index()
         self.sequence_1d = pd.DataFrame(columns=['Date', 'Entry Price', 'Sequence', 'Days', "Yield"])
         self.sequence_1wk = pd.DataFrame(columns=['Date', 'Entry Price', 'Sequence', 'Days', "Yield"])
@@ -44,6 +44,13 @@ class SequenceMethod:
     def get_day_rank(self):
         return self.sequence_1d['Sequence'].iloc[-1]
 
+    def get_data_1d(self):
+        return self.symbol_data_1d
+    def get_data_1wk(self):
+        return self.symbol_data_1wk
+    def get_data_1mo(self):
+        return self.symbol_data_1mo
+
     def print_sequence_data(self,interval):
         if(interval == 'day'):
             print(self.sequence_1d)
@@ -54,10 +61,12 @@ class SequenceMethod:
 
     def get_avg_up_return(self, interval):
         sequence = pd.DataFrame()
-        counter, seq_yield,avg_yield = 0
+        counter = 0
+        seq_yield = 0
+        avg_yield = 0
         if(interval == 'day'): sequence = self.sequence_1d
-        elif(interval == 'week'): sequence = self.sequence_wk
-        elif(interval == 'month'): sequence = self.sequence_mo
+        elif(interval == 'week'): sequence = self.sequence_1wk
+        elif(interval == 'month'): sequence = self.sequence_1mo
 
         for index,row in sequence.iterrows():
             if(row["Sequence"] == 1):
@@ -69,7 +78,9 @@ class SequenceMethod:
 
     def get_avg_down_return(self, interval):
         sequence = pd.DataFrame()
-        counter, seq_yield,avg_yield = 0
+        counter = 0
+        seq_yield = 0
+        avg_yield = 0
         if(interval == 'day'): sequence = self.sequence_1d
         elif(interval == 'week'): sequence = self.sequence_wk
         elif(interval == 'month'): sequence = self.sequence_mo
@@ -260,8 +271,8 @@ def build_sequences(self):
 # print(se.get_week_rank())
 # print(se.get_month_rank())
 
-# # se.print_sequence_data('week')
-# # se.plot_graph('week')
-# # se.print_sequence_data('month')
-# # se.plot_graph('month')
+# se.print_sequence_data('week')
+# se.plot_graph('week')
+# se.print_sequence_data('month')
+# se.plot_graph('month')
 # print('blala')
