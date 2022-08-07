@@ -219,16 +219,16 @@ def build_sequences(self):
 
 
    
-se = SequenceMethod('abt')
-# se.plot_graph('day')
-# se.print_sequence_data('day')
+# se = SequenceMethod('abt')
+# # se.plot_graph('day')
+# # se.print_sequence_data('day')
 
-print(se.get_day_rank())
-print(se.get_week_rank())
-print(se.get_month_rank())
+# print(se.get_day_rank())
+# print(se.get_week_rank())
+# print(se.get_month_rank())
 
-# se.print_sequence_data('week')
-# se.plot_graph('week')
-# se.print_sequence_data('month')
-# se.plot_graph('month')
-print('blala')
+# # se.print_sequence_data('week')
+# # se.plot_graph('week')
+# # se.print_sequence_data('month')
+# # se.plot_graph('month')
+# print('blala')

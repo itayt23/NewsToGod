@@ -1,9 +1,10 @@
+from calendar import month, week
 from distutils.command.build_scripts import first_line_re
 from math import fabs
 import sys
 import asyncio
 from wsgiref.headers import tspecials
-
+from sequencing import SequenceMethod
 from regex import F
 from api_context import Context
 from sectors_sentiment import SectorsSentiment
@@ -19,9 +20,11 @@ import os.path
 from datetime import datetime, timedelta, date
 import requests
 import json
-
+import traceback
 
 MAX_PROG_BAR = 1000
+sequence_spy = SequenceMethod('SPY')
+sequence_qqq = SequenceMethod('QQQ')
 layout = Layout()
 window = layout.setWindow(layout.getMainLayout())
 working = False
@@ -36,16 +39,34 @@ ts_connect = False
 # window.close()
 # window = sg.Window('Caller Finder',layout.getWhatsAppLayout(), size=(750,350),element_justification='c')
 
-def run_market_sentiment():
-    global working, markets
+def run_market_recommendation():
+    global working, markets, window, sequence_spy, sequence_qqq
     bar_thread = threading.Thread(target=update_progrees_bar, args=("markets",))
     bar_thread.start()
     markets = MarketSentiment()
     save_object(markets,"markets")
+    score, sentiment = get_recommendation(markets,sequence_spy,sequence_qqq)
+    window['-RECOMMENDATION-'].update(sentiment)
+    if(score < 0):  window['-RECOMMENDATION-'].update(text_color='red')
+    elif(score > 0):  window['-RECOMMENDATION-'].update(text_color='green')
     working = False
     bar_thread.join()
     window["-PROG-"].UpdateBar(MAX_PROG_BAR)
     print(f"program was finish successfully! =)")
+
+def get_recommendation(markets,sequence_spy,sequence_qqq):
+    sentiment = markets.get_sentiment_score()
+    seq_weekly_spy = sequence_spy.get_week_rank()
+    seq_monthly_spy = sequence_spy.get_month_rank()
+    seq_weekly_qqq = sequence_qqq.get_week_rank()
+    seq_monthly_qqq = sequence_qqq.get_month_rank()
+    score = sentiment  + seq_weekly_spy + seq_monthly_spy + seq_monthly_qqq + seq_weekly_qqq
+    if(score <= -4): return score, "Strong Sell"
+    elif(score < 0): return score, "Sell"
+    elif(score == 0): return score, "Netural"
+    elif(score > 0 and score < 4): return score, "Buy"
+    elif(score >= 4): return score, "Strong Buy"
+
 
 def run_sectors_sentiment():
     global working, sectors
@@ -68,17 +89,21 @@ def run_news_processor(news_num):
 def update_progrees_bar(kind='sectors'):
     global working, window
     counter = 2
-    while(counter < 970 and working):
+    while(counter < 900 and working):
         time.sleep(1.5)
         counter= counter + 1 if kind == "sectors" else counter + 3
         window["-PROG-"].UpdateBar(counter)
+    while(counter < 980 and working):
+        time.sleep(2.5)
+        counter= counter + 0.5 if kind == "sectors" else counter + 1
+        window["-PROG-"].UpdateBar(counter)
 
-def get_markets_sentiment():
+def get_markets_recommendation():
     global window, working
     if not working:
         working = True
         window["-PROG-"].UpdateBar(1)
-        window.perform_long_operation(run_market_sentiment, '-OPERATION DONE-')
+        window.perform_long_operation(run_market_recommendation, '-OPERATION DONE-')
     else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
 
 def get_sectors_sentiment():
@@ -132,8 +157,7 @@ def load_sectors_object():
 
 
 def load_markets_object():
-    global working
-    global markets
+    global working, markets, window, sequence_spy, sequence_qqq
     if not working:
         working = True  
         if(markets != 'None'):
@@ -143,6 +167,10 @@ def load_markets_object():
         if(markets == 0):
             print("Cannot load Markets sentiment, PLEASE GET MARKETS SENTIMENT FIRST")
         else:
+            score, sentiment = get_recommendation(markets,sequence_spy,sequence_qqq)
+            window['-RECOMMENDATION-'].update(sentiment)
+            if(score < 0):  window['-RECOMMENDATION-'].update(text_color='red')
+            elif(score > 0):  window['-RECOMMENDATION-'].update(text_color='green')
             print("LOAD markets sentiment successfully :)")
     else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
     working = False
@@ -198,18 +226,24 @@ def update_ts_data():
     else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
 
 def get_account_details():
-    print("Getting Data...")
     global sectors,markets,window,ts_manager,working
-    window['-SECTORS_SENTIMENT-'].update(sectors.get_sentiment())
-    window['-MARKETS_SENTIMENT-'].update(markets.get_sentiment())
-    url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
-    headers = {"Authorization":f'Bearer {ts_manager.TOKENS.access_token}'}
-    account_details = requests.request("GET", url, headers=headers)
-    account_details = json.loads(account_details.text)
-    window['-ACCOUNT_ID-'].update(account_details['Balances'][0]['AccountID'])
-    window['-ACCOUNT_CASH-'].update(account_details['Balances'][0]['CashBalance'])
-    window['-ACCOUNT_EQUITY-'].update(account_details['Balances'][0]['Equity'])
-    working = False
+    print("Getting Data...")
+    try:
+        window['-SECTORS_SENTIMENT-'].update(sectors.get_sentiment())
+        window['-MARKETS_SENTIMENT-'].update(markets.get_sentiment())
+    except Exception:
+        print(f"Problem with Market\Sectors data, please restart and get them again. Problem Details: \n {traceback.format_exc()}") 
+    try:
+        url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
+        headers = {"Authorization":f'Bearer {ts_manager.TOKENS.access_token}'}
+        account_details = requests.request("GET", url, headers=headers)
+        account_details = json.loads(account_details.text)
+        window['-ACCOUNT_ID-'].update(account_details['Balances'][0]['AccountID'])
+        window['-ACCOUNT_CASH-'].update(account_details['Balances'][0]['CashBalance'])
+        window['-ACCOUNT_EQUITY-'].update(account_details['Balances'][0]['Equity'])
+        working = False
+    except Exception:
+        print(f"problem connection TradeStation Api, Details: \n {traceback.format_exc()}")
     print('Finish')
 
 def process_user_input():
@@ -224,7 +258,7 @@ def process_user_input():
                 window = layout.setWindow(layout.get_tradestation_layout())
                 first_connect = False
         if event == "Get Recommendation":
-            get_markets_sentiment()
+            get_markets_recommendation()
         if event == "Get Sectors Sentiment":
             get_sectors_sentiment()
         if event == "Load Sectors Sentiment":
@@ -241,7 +275,7 @@ def process_user_input():
 
         event, values = window.read(timeout=100)
     window.close()
-    sectors.print_all_sentiment()
+    # sectors.print_all_sentiment()
     sys.exit()
 
 

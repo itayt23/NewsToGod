@@ -86,8 +86,8 @@ class MarketSentiment:
         self.market_df.to_csv(results_path / f"final_sentiment_spy {date.today()}.csv")
         print(f'TOTAL RUN TIME WAS: {round((time.time() - start_run_time)/60, 2)} minutes')
       
-    def get_sentiment_number(self):
-        return self.sentiment
+    def get_sentiment_score(self):
+        return sentiment_to_score(score_to_sentiment(self.sentiment))
 
     def get_sentiment(self):
         return score_to_sentiment(self.sentiment) 
@@ -227,6 +227,12 @@ def score_to_sentiment(score):
     elif(0.1 < score <= 0.5): return ("Buy")
     elif(0.5 < score <=1): return ("Strong Buy")
 
+def sentiment_to_score(sentiment):
+    if(sentiment == 'Strong Sell'): return -2
+    if(sentiment == 'Sell'): return -1
+    if(sentiment == 'Buy'): return 0
+    if(sentiment == 'Netural'): return 1
+    if(sentiment == 'Strong Buy'): return 2
 
 def ma_score_daily(market_1d,market_1wk):
     global daily_scores, daily_properties, cut
