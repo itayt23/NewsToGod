@@ -272,10 +272,10 @@ def process_user_input():
             else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
         if event == 'Update Data':
             update_ts_data()
+            sectors.print_all_sentiment()
 
         event, values = window.read(timeout=100)
     window.close()
-    # sectors.print_all_sentiment()
     sys.exit()
 
 

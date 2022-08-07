@@ -1,3 +1,4 @@
+from errno import EOWNERDEAD
 from turtle import up
 from grpc import UnaryStreamClientInterceptor
 from importlib_metadata import entry_points
@@ -50,6 +51,38 @@ class SequenceMethod:
             print(self.sequence_1wk)
         if(interval == 'month'):
             print(self.sequence_1mo)
+
+    def get_avg_up_return(self, interval):
+        sequence = pd.DataFrame()
+        counter, seq_yield,avg_yield = 0
+        if(interval == 'day'): sequence = self.sequence_1d
+        elif(interval == 'week'): sequence = self.sequence_wk
+        elif(interval == 'month'): sequence = self.sequence_mo
+
+        for index,row in sequence.iterrows():
+            if(row["Sequence"] == 1):
+                if(row["Yield"] > 0):
+                    counter = counter + 1
+                    seq_yield = seq_yield + row["Yield"]
+        avg_yield = seq_yield / counter
+        return avg_yield
+
+    def get_avg_down_return(self, interval):
+        sequence = pd.DataFrame()
+        counter, seq_yield,avg_yield = 0
+        if(interval == 'day'): sequence = self.sequence_1d
+        elif(interval == 'week'): sequence = self.sequence_wk
+        elif(interval == 'month'): sequence = self.sequence_mo
+
+        for index,row in sequence.iterrows():
+            if(row["Sequence"] == -1):
+                if(row["Yield"] > 0):
+                    counter = counter + 1
+                    seq_yield = seq_yield + row["Yield"]
+        avg_yield = seq_yield / counter
+        return avg_yield
+
+
            
     def plot_graph(self,interval):
         up_seq_x = []
