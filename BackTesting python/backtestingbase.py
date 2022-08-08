@@ -62,6 +62,7 @@ class BacktestBase(object):
         self.verbose = verbose
         self.stoploss = 0
         self.entry_price = 0
+        self.days_hold = 0
         self.sequence = SequenceMethod(self.symbol)
         self.symbol_data_1d = pd.DataFrame()
         self.symbol_data_1wk = pd.DataFrame()

@@ -27,6 +27,187 @@ class BacktestLongOnly(BacktestBase):
         self.position = 0  # initial neutral position
         self.trades = 0  # no trades yet
         self.amount = self.initial_amount  # reset initial capital
+        no_trades = True
+        try:
+            self.symbol_data_1d[f'SMA {SMA1}'] = ta.SMA(self.symbol_data_1d['Close'],timeperiod=13)
+            self.symbol_data_1d[f'SMA {SMA2}'] = ta.SMA(self.symbol_data_1d[f'SMA {SMA1}'], timeperiod=5)
+            self.symbol_data_1wk[f'SMA {SMA1}'] = ta.SMA(self.symbol_data_1wk['Close'],timeperiod=13)
+            self.symbol_data_1wk[f'SMA {SMA2}'] = ta.SMA(self.symbol_data_1wk[f'SMA {SMA1}'], timeperiod=5)
+            self.symbol_data_1mo[f'SMA {SMA1}'] = ta.SMA(self.symbol_data_1mo['Close'],timeperiod=13)
+            self.symbol_data_1mo[f'SMA {SMA2}'] = ta.SMA(self.symbol_data_1mo[f'SMA {SMA1}'], timeperiod=5)
+            self.symbol_data_1d = self.symbol_data_1d.dropna()
+        except Exception:
+            print(f'Problem with SMA datas, Details: \n {traceback.format_exc()}')
+        trade_yield = 0
+        for bar in range(SMA2, len(self.symbol_data_1d)):
+            last_close = self.symbol_data_1d.Close.iloc[bar]
+            seq_month = check_seq_by_date_monthly(self, self.symbol_data_1d.index[bar])
+            index_week,seq_week = check_seq_by_date_weekly(self, self.symbol_data_1d.index[bar])
+            index_day, seq_day = check_seq_by_date_daily(self, self.symbol_data_1d.index[bar])
+            if self.position == 0:
+                if(seq_month == 1 and seq_week == 1 and seq_day == 1): 
+                    no_trades = False
+                    self.place_buy_order(bar, amount=self.amount)
+                    self.position = 1  # long position
+                    self.stoploss = self.sequence.sequence_1wk.loc[index_week,'Entry Price']
+                    self.entry_price = last_close
+            elif self.position == 1:
+                trade_yield = (last_close - self.entry_price)/self.entry_price*100
+                if seq_month == -1 or  seq_week == -1  or trade_yield > 16:
+                    if(trade_yield > 0):
+                        self.win_trades += 1
+                    self.place_sell_order(bar, units=self.units)
+                    self.position = 0  # market neutral
+        self.close_out(bar)
+        new_row["Strategy Yield"] = ((self.amount - self.initial_amount) /self.initial_amount * 100)
+        new_row["Symbol"] = self.symbol
+        new_row["Period"] = self.start_test
+        new_row["Hold Yield"] = self.hold_yield
+        if no_trades: new_row["Trades"] = 0 
+        else: new_row["Trades"] = self.trades
+        new_row["Win Rate"] = ((self.win_trades/self.trades)*100)
+        data_output = data_output.append(new_row, ignore_index=True)
+
+    def run_seq_no_tp_strategy(self, SMA1, SMA2):
+        global data_output
+        ''' Backtesting a SMA-based strategy.
+
+        Parameters
+        ==========
+        SMA1, SMA2: int
+            shorter and longer term simple moving average (in days)
+        '''
+        msg = f'\n\nRunning SEQ strategy | SMA1={SMA1} & SMA2={SMA2}'
+        msg += f'\nfixed costs {self.ftc} | '
+        msg += f'proportional costs {self.ptc}'
+        print(msg)
+        print('=' * 55)
+        new_row ={}
+        # avg_weekly_trend = self.sequence.get_avg_up_return('week')
+        self.position = 0  # initial neutral position
+        self.trades = 0  # no trades yet
+        self.amount = self.initial_amount  # reset initial capital
+        no_trades = True
+        try:
+            self.symbol_data_1d[f'SMA {SMA1}'] = ta.SMA(self.symbol_data_1d['Close'],timeperiod=13)
+            self.symbol_data_1d[f'SMA {SMA2}'] = ta.SMA(self.symbol_data_1d[f'SMA {SMA1}'], timeperiod=5)
+            self.symbol_data_1wk[f'SMA {SMA1}'] = ta.SMA(self.symbol_data_1wk['Close'],timeperiod=13)
+            self.symbol_data_1wk[f'SMA {SMA2}'] = ta.SMA(self.symbol_data_1wk[f'SMA {SMA1}'], timeperiod=5)
+            self.symbol_data_1mo[f'SMA {SMA1}'] = ta.SMA(self.symbol_data_1mo['Close'],timeperiod=13)
+            self.symbol_data_1mo[f'SMA {SMA2}'] = ta.SMA(self.symbol_data_1mo[f'SMA {SMA1}'], timeperiod=5)
+            self.symbol_data_1d = self.symbol_data_1d.dropna()
+        except Exception:
+            print(f'Problem with SMA datas, Details: \n {traceback.format_exc()}')
+        trade_yield = 0
+        for bar in range(SMA2, len(self.symbol_data_1d)):
+            last_close = self.symbol_data_1d.Close.iloc[bar]
+            seq_month = check_seq_by_date_monthly(self, self.symbol_data_1d.index[bar])
+            index_week,seq_week = check_seq_by_date_weekly(self, self.symbol_data_1d.index[bar])
+            index_day, seq_day = check_seq_by_date_daily(self, self.symbol_data_1d.index[bar])
+            if self.position == 0:
+                if(seq_month == 1 and seq_week == 1 and seq_day == 1): 
+                    no_trades = False
+                    self.place_buy_order(bar, amount=self.amount)
+                    self.position = 1  # long position
+                    self.stoploss = self.sequence.sequence_1wk.loc[index_week,'Entry Price']
+                    self.entry_price = last_close
+            elif self.position == 1:
+                trade_yield = (last_close - self.entry_price)/self.entry_price*100
+                if seq_month == -1 or seq_week == -1:
+                    if(trade_yield > 0):
+                        self.win_trades += 1
+                    self.place_sell_order(bar, units=self.units)
+                    self.position = 0  # market neutral
+        self.close_out(bar)
+        new_row["Strategy Yield"] = ((self.amount - self.initial_amount) /self.initial_amount * 100)
+        new_row["Symbol"] = self.symbol
+        new_row["Period"] = self.start_test
+        new_row["Hold Yield"] = self.hold_yield
+        if no_trades: new_row["Trades"] = 0 
+        else: new_row["Trades"] = self.trades
+        new_row["Win Rate"] = ((self.win_trades/self.trades)*100)
+        data_output = data_output.append(new_row, ignore_index=True)
+
+    def run_LIPseq_strategy(self, SMA1, SMA2):
+        global data_output
+        ''' Backtesting a SMA-based strategy.
+
+        Parameters
+        ==========
+        SMA1, SMA2: int
+            shorter and longer term simple moving average (in days)
+        '''
+        msg = f'\n\nRunning SEQ strategy | SMA1={SMA1} & SMA2={SMA2}'
+        msg += f'\nfixed costs {self.ftc} | '
+        msg += f'proportional costs {self.ptc}'
+        print(msg)
+        print('=' * 55)
+        new_row ={}
+        # avg_weekly_trend = self.sequence.get_avg_up_return('week')
+        self.position = 0  # initial neutral position
+        self.trades = 0  # no trades yet
+        self.amount = self.initial_amount  # reset initial capital
+        no_trades = True
+        try:
+            self.symbol_data_1d[f'SMA {SMA1}'] = ta.SMA(self.symbol_data_1d['Close'],timeperiod=13)
+            self.symbol_data_1d[f'SMA {SMA2}'] = ta.SMA(self.symbol_data_1d[f'SMA {SMA1}'], timeperiod=5)
+            self.symbol_data_1wk[f'SMA {SMA1}'] = ta.SMA(self.symbol_data_1wk['Close'],timeperiod=13)
+            self.symbol_data_1wk[f'SMA {SMA2}'] = ta.SMA(self.symbol_data_1wk[f'SMA {SMA1}'], timeperiod=5)
+            self.symbol_data_1mo[f'SMA {SMA1}'] = ta.SMA(self.symbol_data_1mo['Close'],timeperiod=13)
+            self.symbol_data_1mo[f'SMA {SMA2}'] = ta.SMA(self.symbol_data_1mo[f'SMA {SMA1}'], timeperiod=5)
+            self.symbol_data_1d = self.symbol_data_1d.dropna()
+        except Exception:
+            print(f'Problem with SMA datas, Details: \n {traceback.format_exc()}')
+        trade_yield = 0
+        for bar in range(SMA2, len(self.symbol_data_1d)):
+            last_close = self.symbol_data_1d.Close.iloc[bar]
+            seq_month = check_seq_by_date_monthly(self, self.symbol_data_1d.index[bar])
+            index_week,seq_week = check_seq_by_date_weekly(self, self.symbol_data_1d.index[bar])
+            index_day, seq_day = check_seq_by_date_daily(self, self.symbol_data_1d.index[bar])
+            if self.position == 0:
+                if(seq_month == 1 and seq_week == 1): 
+                    no_trades = False
+                    self.place_buy_order(bar, amount=self.amount)
+                    self.position = 1  # long position
+                    self.stoploss = self.sequence.sequence_1wk.loc[index_week,'Entry Price']
+                    self.entry_price = last_close
+            elif self.position == 1:
+                trade_yield = (last_close - self.entry_price)/self.entry_price*100
+                if seq_month == -1 and seq_week == -1:
+                    if(trade_yield > 0):
+                        self.win_trades += 1
+                    self.place_sell_order(bar, units=self.units)
+                    self.position = 0  # market neutral
+        self.close_out(bar)
+        new_row["Strategy Yield"] = ((self.amount - self.initial_amount) /self.initial_amount * 100)
+        new_row["Symbol"] = self.symbol
+        new_row["Period"] = self.start_test
+        new_row["Hold Yield"] = self.hold_yield
+        if no_trades: new_row["Trades"] = 0 
+        else: new_row["Trades"] = self.trades
+        new_row["Win Rate"] = ((self.win_trades/self.trades)*100)
+        data_output = data_output.append(new_row, ignore_index=True)
+
+
+    def run_seq_strategy_trades(self, SMA1, SMA2):
+        global data_output_trades
+        ''' Backtesting a SMA-based strategy.
+
+        Parameters
+        ==========
+        SMA1, SMA2: int
+            shorter and longer term simple moving average (in days)
+        '''
+        msg = f'\n\nRunning SEQ strategy | SMA1={SMA1} & SMA2={SMA2}'
+        msg += f'\nfixed costs {self.ftc} | '
+        msg += f'proportional costs {self.ptc}'
+        print(msg)
+        print('=' * 55)
+        new_row ={}
+        # avg_weekly_trend = self.sequence.get_avg_up_return('week')
+        self.position = 0  # initial neutral position
+        self.trades = 0  # no trades yet
+        self.amount = self.initial_amount  # reset initial capital
         try:
             self.symbol_data_1d[f'SMA {SMA1}'] = ta.SMA(self.symbol_data_1d['Close'],timeperiod=13)
             self.symbol_data_1d[f'SMA {SMA2}'] = ta.SMA(self.symbol_data_1d[f'SMA {SMA1}'], timeperiod=5)
@@ -49,21 +230,29 @@ class BacktestLongOnly(BacktestBase):
                     self.position = 1  # long position
                     self.stoploss = self.sequence.sequence_1wk.loc[index_week,'Entry Price']
                     self.entry_price = last_close
+                    new_row["Date"] = str(self.symbol_data_1d.index[bar])
+                    new_row["Price"] = last_close
+                    new_row["Buy\Sell"] = 'Buy'
+                    new_row["Trade Yield"] = None
+                    new_row["Days Hold"] = None
+                    data_output_trades = data_output_trades.append(new_row, ignore_index=True)
             elif self.position == 1:
+                self.days_hold += 1
                 trade_yield = (last_close - self.entry_price)/self.entry_price*100
-                if seq_month == -1 or  seq_week == -1  or trade_yield > 16:
+                if seq_month == -1 or seq_week == -1:
                     if(trade_yield > 0):
                         self.win_trades += 1
                     self.place_sell_order(bar, units=self.units)
+                    new_row["Date"] = str(self.symbol_data_1d.index[bar])
+                    new_row["Days Hold"] = self.days_hold
+                    new_row["Buy\Sell"] = 'Sell'
+                    new_row["Trade Yield"] = trade_yield
+                    new_row["Price"] = last_close
+                    data_output_trades = data_output_trades.append(new_row, ignore_index=True)
                     self.position = 0  # market neutral
+                    self.days_hold = 0
+            new_row.clear()
         self.close_out(bar)
-        new_row["Strategy Yield"] = ((self.amount - self.initial_amount) /self.initial_amount * 100)
-        new_row["Symbol"] = self.symbol
-        new_row["Period"] = self.start_test
-        new_row["Hold Yield"] = self.hold_yield
-        new_row["Trades"] = self.trades
-        new_row["Win Rate"] = ((self.win_trades/self.trades)*100)
-        data_output = data_output.append(new_row, ignore_index=True)
 
 
     def run_momentum_strategy(self, momentum):
@@ -155,20 +344,26 @@ def check_seq_by_date_daily(self,date):
 
         
 data_output = pd.DataFrame(columns=['Symbol','Period','Strategy Yield','Hold Yield','Trades','Win Rate'])
+data_output_trades = pd.DataFrame(columns=['Date','Buy\Sell','Price','Trade Yield','Days Hold'])
 if __name__ == '__main__':
     def run_strategies():
-        lobt.run_seq_strategy(13, 5)
+        xlc.run_seq_strategy_trades(13, 5)
+        # lobt.run_seq_no_tp_strategy(13, 5)
     
     results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
     if not results_path.exists():
         results_path.mkdir(parents=True)
-    symbol = ['XLC','FIVG','VR','IYZ','XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ','AWAY','SOCL','BFIT','KROP','XLP','FTXG','KXI','PBJ',
-                'XLE','XES','CNRG','FTXN','SOLR','ICLN','XLF','KIE','KCE','KRE','XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC','XLI','AIRR','IFRA','IGF','SIMS',
-                'XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR','XLU','RNRG','FIW','FAN','XLRE','KBWY','SRVR','VPN','GRNR','XLB','PYZ','XME','HAP','MXI','IGE','MOO',
-                'WOOD','COPX','FXZ','URA','LIT']
-    for ticker in symbol:
-        lobt = BacktestLongOnly(ticker, '2000-1-1', '2022-08-05',1000000, ptc=0.005, verbose=True)
-        run_strategies()
-        data_output.to_csv(results_path / f"Startegy_with_commission_0.005.csv")
+    # symbol = ['XLC','FIVG','VR','IYZ','XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ','AWAY','SOCL','BFIT','KROP','XLP','FTXG','KXI','PBJ',
+    #             'XLE','XES','CNRG','FTXN','SOLR','ICLN','XLF','KIE','KCE','KRE','XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC','XLI','AIRR','IFRA','IGF','SIMS',
+    #             'XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR','XLU','RNRG','FIW','FAN','XLRE','KBWY','SRVR','VPN','GRNR','XLB','PYZ','XME','HAP','MXI','IGE','MOO',
+    #             'WOOD','COPX','FXZ','URA','LIT']
+    # for ticker in symbol:
+    #     lobt = BacktestLongOnly(ticker, '2000-1-1', '2022-08-05',1000000, ptc=0.005, verbose=True)
+    #     run_strategies()
+    #     data_output.to_csv(results_path / f"Startegy_with_commission_NOTP.csv")
+
+    xlc = BacktestLongOnly('XLC', '2000-1-1', '2022-08-05',1000000, ptc=0.005, verbose=True)
+    run_strategies()
+    data_output_trades.to_csv(results_path / f"XLC_trades.csv")
 
     
