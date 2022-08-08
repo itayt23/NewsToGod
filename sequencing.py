@@ -73,6 +73,7 @@ class SequenceMethod:
                 if(row["Yield"] > 0):
                     counter = counter + 1
                     seq_yield = seq_yield + row["Yield"]
+        if counter == 0: counter = 1
         avg_yield = seq_yield / counter
         return avg_yield
 

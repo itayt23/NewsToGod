@@ -58,6 +58,7 @@ class BacktestBase(object):
         self.units = 0
         self.position = 0
         self.trades = 0
+        self.win_trades = 0
         self.verbose = verbose
         self.stoploss = 0
         self.entry_price = 0
@@ -65,8 +66,9 @@ class BacktestBase(object):
         self.symbol_data_1d = pd.DataFrame()
         self.symbol_data_1wk = pd.DataFrame()
         self.symbol_data_1mo = pd.DataFrame()
-        
         self.get_data()
+        self.start_test = self.symbol_data_1d.index[0]
+        self.hold_yield = (self.symbol_data_1d.Close.iloc[-1] - self.symbol_data_1d.Close.iloc[0])/(self.symbol_data_1d.Close.iloc[0])*100
 
     def get_data(self):
         ''' Retrieves and prepares the data.
@@ -131,7 +133,7 @@ class BacktestBase(object):
             units = int(amount / price)
         self.amount += (units * price) * (1 - self.ptc) - self.ftc
         self.units -= units
-        self.trades += 1
+        # self.trades += 1
         if self.verbose:
             print(f'{date} | selling {units} units at {price:.2f}')
             self.print_balance(bar)
@@ -152,6 +154,7 @@ class BacktestBase(object):
                 self.initial_amount * 100)
         print('Net Performance [%] {:.2f}'.format(perf))
         print('Trades Executed [#] {:.2f}'.format(self.trades))
+        print('Win Rate        [%] {:.2f}'.format((self.win_trades/self.trades)*100))
         print('=' * 55)
 
 
