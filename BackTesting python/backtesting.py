@@ -2,12 +2,15 @@ from importlib.metadata import entry_points
 from msilib import sequence
 from re import T
 from sqlite3 import threadsafety
+from tabnanny import verbose
+from timeit import repeat
 import traceback
 from backtestingbase import *
 from sequencing import SequenceMethod
 import talib as ta
 from pathlib import Path
 from datetime import date,datetime,timedelta
+from concurrent.futures import ThreadPoolExecutor
 
 class Backtest(BacktestBase):
 
@@ -116,22 +119,29 @@ data_output = pd.DataFrame(columns=['Symbol','Period','Strategy Yield','Hold Yie
 data_output_trades = pd.DataFrame(columns=['Date','Buy\Sell','Price','Trade Yield','Days Hold'])
 
 
-def get_best_fit(symbols,day):
+def get_best_fit(symbols,day,symbol_data_month,symbol_data_weekly):
     for symbol in symbols:
-        symbol_data_month = pd.DataFrame(yf.download(symbol, period='max',interval='1mo')).dropna()
-        symbol_sequence_monthly = SequenceMethod(symbol_data_month,'monthly')
+        data_monthly = symbol_data_month.loc[symbol].T
+        data_weekly = symbol_data_weekly.loc[symbol].T
+        print(data_monthly)
+        test = pd.DataFrame(yf.download('IYZ', period='max',interval='1mo')).dropna()
+        print(test)
+        # symbol_data_month = pd.DataFrame(yf.download(symbol, period='max',interval='1mo',progress=False)).dropna()
+        symbol_sequence_monthly = SequenceMethod(data_monthly,'monthly')
+        print(symbol_sequence_monthly.get_seq_df())
         if(check_seq_by_date_monthly(symbol_sequence_monthly.get_seq_df(),day) != 1):
             continue
-        symbol_data_weekly = pd.DataFrame(yf.download(symbol, period='max',interval='1wk')).dropna()
-        symbol_sequence_weekly = SequenceMethod(symbol_data_weekly,'weekly')
+        # symbol_data_weekly = pd.DataFrame(yf.download(symbol, period='max',interval='1wk',progress=False)).dropna()
+        symbol_sequence_weekly = SequenceMethod(data_weekly,'weekly')
         if(check_seq_by_date_weekly(symbol_sequence_weekly.get_seq_df(),day) != 1):
             continue
         try:
-            symbol_data_weekly['SMA13'] = ta.SMA(symbol_data_weekly['Close'],timeperiod=13)
-            symbol_data_weekly['SMA5'] = ta.SMA(symbol_data_weekly['SMA5'], timeperiod=5)
+            data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
+            data_weekly['SMA5'] = ta.SMA(data_weekly['SMA5'], timeperiod=5)
         except:
             continue
-        print(symbol_data_weekly)
+        print(data_weekly)
+        return 1
 
         
 
@@ -139,18 +149,30 @@ if __name__ == '__main__':
     results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
     if not results_path.exists():
         results_path.mkdir(parents=True)
-    symbols = ['XLC','FIVG','VR','IYZ','XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ','AWAY','SOCL','BFIT','KROP','XLP','FTXG','KXI','PBJ',
-                'XLE','XES','CNRG','FTXN','SOLR','ICLN','XLF','KIE','KCE','KRE','XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC','XLI','AIRR','IFRA','IGF','SIMS',
-                'XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR','XLU','RNRG','FIW','FAN','XLRE','KBWY','SRVR','VPN','GRNR','XLB','PYZ','XME','HAP','MXI','IGE','MOO',
-                'WOOD','COPX','FXZ','URA','LIT']
+    symbols = ['IYZ','XLY','XHB', 'PEJ','XLP','KXI','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
+                'XLK','FDN','XLU','FIW','FAN','XLRE','XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
     
-    trading_days = pd.DataFrame(yf.download('qqq', period='max',interval='1d')).dropna()
+    trading_days = pd.DataFrame(yf.download('qqq', period='max',interval='1d',progress=False)).dropna()
     trading_days = trading_days.index.to_list()
     for i in range(len(trading_days)):
         trading_days[i] = trading_days[i].date()
-    trading_days = trading_days[206:]
+    trading_days = trading_days[920:]
+    symbol_data_month = pd.DataFrame(yf.download(tickers=symbols, period='max',interval='1mo',progress=False,group_by = 'ticker',threads = True)).dropna()
+    symbol_data_weekly = pd.DataFrame(yf.download(tickers=symbols, period='max',interval='1wk',progress=False,group_by = 'ticker',threads = True)).dropna()
+    symbol_data_month = symbol_data_month.T
+    symbol_data_weekly = symbol_data_weekly.T
     for day in trading_days:
-        get_best_fit(symbols,day)
+        get_best_fit(symbols,day,symbol_data_month,symbol_data_weekly)
+    # for day in trading_days:
+    #     with ThreadPoolExecutor(max_workers=8) as executor:
+    #         all_prints = executor.map(get_best_fit, symbols)
+    #         executor.shutdown(wait=True)
+    #     print(day)
+
+
+
+
+        # get_best_fit(symbols,day)
     # xlc = BacktestLongOnly('XLC', '2000-1-1', '2022-08-05',1000000, ptc=0.005, verbose=True)
     # run_strategies()
     # data_output_trades.to_csv(results_path / f"XLC_trades.csv")
