@@ -1,4 +1,5 @@
 from errno import EOWNERDEAD
+from socketserver import DatagramRequestHandler
 from turtle import up
 from grpc import UnaryStreamClientInterceptor
 from importlib_metadata import entry_points
@@ -7,6 +8,7 @@ from regex import P
 import yfinance as yf
 import pandas as pd
 from datetime import date,datetime,timedelta
+import calendar
 from pathlib import Path
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
@@ -20,7 +22,7 @@ import numpy as np
 
 
 
-class SequenceMethod:
+class SequenceMethodSymbol:
 
     def __init__(self,ticker):
         # load_dotenv("api.env")
@@ -73,8 +75,9 @@ class SequenceMethod:
                 if(row["Yield"] > 0):
                     counter = counter + 1
                     seq_yield = seq_yield + row["Yield"]
-        if counter == 0: counter = 1
-        avg_yield = seq_yield / counter
+        try:
+            avg_yield = seq_yield / counter
+        except: return 7
         return avg_yield
 
     def get_avg_down_return(self, interval):
@@ -194,12 +197,18 @@ def build_sequences(self):
             close_price = symbol_df.loc[i, "Close"]
             low_price = symbol_df.loc[i-1, "Low"]
             high_price = symbol_df.loc[i-1, "High"]
+            date = symbol_df.loc[i, "Date"].date()
+            if(interval == 2):
+                date = date.replace(day = calendar.monthrange(date.year, date.month)[1])
+            if(interval == 1):
+                start = date - timedelta(days=date.weekday())
+                date = start + timedelta(days=6)
             if not in_sequence:
                 if(close_price > low_price):
                     up_seq = True
                     up_seq_list.append((high_price,low_price))
                     up_seq_list.append((symbol_df.loc[i, "High"],symbol_df.loc[i, "Low"]))
-                    sequence.loc[seq_df_index,'Date'] = symbol_df.loc[i, "Date"]
+                    sequence.loc[seq_df_index,'Date'] = date
                     sequence.loc[seq_df_index,'Sequence'] = 1
                     sequence.loc[seq_df_index,'Entry Price'] = symbol_df.loc[i, "Low"]
                     enter_price = symbol_df.loc[i, "Close"]
@@ -208,7 +217,7 @@ def build_sequences(self):
                     down_seq = True
                     down_seq_list.append((low_price,high_price))
                     down_seq_list.append((symbol_df.loc[i, "Low"],symbol_df.loc[i, "High"]))
-                    sequence.loc[seq_df_index,'Date'] = symbol_df.loc[i, "Date"]
+                    sequence.loc[seq_df_index,'Date'] = date
                     sequence.loc[seq_df_index,'Sequence'] = -1
                     sequence.loc[seq_df_index,'Entry Price'] = symbol_df.loc[i, "High"]
                     sell_price = symbol_df.loc[i, "Close"]
@@ -230,7 +239,7 @@ def build_sequences(self):
                         down_seq = True
                         seq_df_index = seq_df_index + 1
                         down_seq_list.append((symbol_df.loc[i, "Low"],symbol_df.loc[i, "High"]))
-                        sequence.loc[seq_df_index,'Date'] = symbol_df.loc[i, "Date"]
+                        sequence.loc[seq_df_index,'Date'] = date
                         sequence.loc[seq_df_index,'Sequence'] = -1
                         sequence.loc[seq_df_index,'Entry Price'] = symbol_df.loc[i, "High"]
                         enter_price = symbol_df.loc[i, "Close"]
@@ -250,7 +259,7 @@ def build_sequences(self):
                         up_seq = True
                         seq_df_index = seq_df_index + 1
                         up_seq_list.append((symbol_df.loc[i, "High"],symbol_df.loc[i, "Low"]))
-                        sequence.loc[seq_df_index,'Date'] = symbol_df.loc[i, "Date"]
+                        sequence.loc[seq_df_index,'Date'] = date
                         sequence.loc[seq_df_index,'Sequence'] = 1
                         sequence.loc[seq_df_index,'Entry Price'] = symbol_df.loc[i, "Low"]
                         enter_price = symbol_df.loc[i, "Close"]
@@ -263,8 +272,134 @@ def build_sequences(self):
     return seq_1d,seq_1wk,seq_1mo
 
 
+class SequenceMethod:
+
+    def __init__(self, data, interval):
+        self.data = data
+        self.interval = interval
+        self.sequence = get_sequence(data,interval)
+
+    def get_last_sequence(self):
+        return self.sequence['Sequence'].iloc[-1]
+
+    def get_seq_df(self):
+        return self.sequence
+
+    def get_avg_up_return(self):
+        counter = 0
+        seq_yield = 0
+        avg_yield = 0
+        for index,row in self.sequence.iterrows():
+            if(row["Sequence"] == 1):
+                if(row["Yield"] > 0):
+                    counter = counter + 1
+                    seq_yield = seq_yield + row["Yield"]
+        try:
+            avg_yield = seq_yield / counter
+        except: return 7
+        return avg_yield
+
+    def get_avg_down_return(self, interval):
+        counter = 0
+        seq_yield = 0
+        avg_yield = 0
+        for index,row in self.sequence.iterrows():
+            if(row["Sequence"] == -1):
+                if(row["Yield"] > 0):
+                    counter = counter + 1
+                    seq_yield = seq_yield + row["Yield"]
+        avg_yield = seq_yield / counter
+        return avg_yield
+
+def get_sequence(data, interval):
+    symbol_df = data.rename_axis('Date').reset_index()
+    sequence = pd.DataFrame(columns=['Date', 'Entry Price', 'Sequence', 'Days', "Yield"])
+    seq_df_index = 0
+    down_seq = up_seq = False
+    down_seq_list = up_seq_list =[]
+    close_price = low_price = high_price =  enter_price = sell_price = seq_yield = 1
+    days = 0
+    in_sequence = False
+    first = True
+    for i in range(len(symbol_df)):
+        if first:
+            first = False
+            continue
+        close_price = symbol_df.loc[i, "Close"]
+        low_price = symbol_df.loc[i-1, "Low"]
+        high_price = symbol_df.loc[i-1, "High"]
+        date = symbol_df.loc[i, "Date"].date()
+        if(interval == 'monthly'):
+            date = date.replace(day = calendar.monthrange(date.year, date.month)[1])
+        if(interval == 'weekly'):
+            start = date - timedelta(days=date.weekday())
+            date = start + timedelta(days=6)
+        if not in_sequence:
+            if(close_price > low_price):
+                up_seq = True
+                up_seq_list.append((high_price,low_price))
+                up_seq_list.append((symbol_df.loc[i, "High"],symbol_df.loc[i, "Low"]))
+                sequence.loc[seq_df_index,'Date'] = date
+                sequence.loc[seq_df_index,'Sequence'] = 1
+                sequence.loc[seq_df_index,'Entry Price'] = symbol_df.loc[i, "Low"]
+                enter_price = symbol_df.loc[i, "Close"]
+                in_sequence = True
+            elif(close_price < high_price):
+                down_seq = True
+                down_seq_list.append((low_price,high_price))
+                down_seq_list.append((symbol_df.loc[i, "Low"],symbol_df.loc[i, "High"]))
+                sequence.loc[seq_df_index,'Date'] = date
+                sequence.loc[seq_df_index,'Sequence'] = -1
+                sequence.loc[seq_df_index,'Entry Price'] = symbol_df.loc[i, "High"]
+                sell_price = symbol_df.loc[i, "Close"]
+                in_sequence = True
+        else:
+            if(up_seq):
+                days = days + 1
+                if(close_price > max(up_seq_list)[1]):
+                    up_seq_list.append((symbol_df.loc[i, "High"],symbol_df.loc[i, "Low"]))
+                    continue
+                else: #finsih up trend and starting down trend
+                    sell_price = symbol_df.loc[i, "Close"]
+                    seq_yield = (sell_price - enter_price)/enter_price*100
+                    sequence.loc[seq_df_index,'Yield'] = seq_yield
+                    sequence.loc[seq_df_index,'Days'] = days
+                    days = seq_yield = 0
+                    up_seq_list = down_seq_list =[]
+                    up_seq = False
+                    down_seq = True
+                    seq_df_index = seq_df_index + 1
+                    down_seq_list.append((symbol_df.loc[i, "Low"],symbol_df.loc[i, "High"]))
+                    sequence.loc[seq_df_index,'Date'] = date
+                    sequence.loc[seq_df_index,'Sequence'] = -1
+                    sequence.loc[seq_df_index,'Entry Price'] = symbol_df.loc[i, "High"]
+                    enter_price = symbol_df.loc[i, "Close"]
+            elif(down_seq):
+                days = days + 1
+                if(close_price < min(down_seq_list)[1]):
+                    down_seq_list.append((symbol_df.loc[i, "Low"],symbol_df.loc[i, "High"]))
+                    continue
+                else: #turning from dowm trend to up trend
+                    sell_price = symbol_df.loc[i, "Close"]
+                    seq_yield = (sell_price - enter_price)/enter_price*100
+                    sequence.loc[seq_df_index,'Yield'] = seq_yield*(-1)
+                    sequence.loc[seq_df_index,'Days'] = days
+                    days = seq_yield = 0
+                    up_seq_list = down_seq_list =[]
+                    down_seq = False
+                    up_seq = True
+                    seq_df_index = seq_df_index + 1
+                    up_seq_list.append((symbol_df.loc[i, "High"],symbol_df.loc[i, "Low"]))
+                    sequence.loc[seq_df_index,'Date'] = date
+                    sequence.loc[seq_df_index,'Sequence'] = 1
+                    sequence.loc[seq_df_index,'Entry Price'] = symbol_df.loc[i, "Low"]
+                    enter_price = symbol_df.loc[i, "Close"]
+
+    return sequence
+
+
    
-# se = SequenceMethod('abt')
+# se = SequenceMethod('XLC')
 # # se.plot_graph('day')
 # # se.print_sequence_data('day')
 

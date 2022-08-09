@@ -369,7 +369,7 @@ data_output_trades = pd.DataFrame(columns=['Date','Buy\Sell','Price','Trade Yiel
 if __name__ == '__main__':
     def run_strategies():
         # xlc.run_seq_strategy_trades(13, 5)
-        lobt.run_seq_strategy(13, 5)
+        lobt.run_LIPseq_strategy(13, 5)
     
     results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
     if not results_path.exists():
@@ -381,7 +381,7 @@ if __name__ == '__main__':
     for ticker in symbol:
         lobt = BacktestLongOnly(ticker, '2000-1-1', '2022-08-05',1000000, ptc=0.005, verbose=True)
         run_strategies()
-        data_output.to_csv(results_path / f"Startegy_with_commission.csv")
+        data_output.to_csv(results_path / f"Startegy_with_commission3.csv")
 
     # xlc = BacktestLongOnly('XLC', '2000-1-1', '2022-08-05',1000000, ptc=0.005, verbose=True)
     # run_strategies()

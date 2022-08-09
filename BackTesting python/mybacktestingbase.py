@@ -47,15 +47,17 @@ class BacktestBase(object):
         closes out a long or short position
     '''
 
-    def __init__(self, symbol, start, end, amount,
+    def __init__(self, start, end, amount, exposure = 0.25,
                  ftc=0.0, ptc=0.0, verbose=True):
-        self.symbol = symbol
         self.start = start
         self.end = end
         self.initial_amount = amount
         self.amount = amount
-        self.ftc = ftc
+        self.cash = amount
+        self.exposure = exposure
         self.ptc = ptc
+        self.ftc = ftc
+        self.money_inside = 0
         self.units = 0
         self.position = 0
         self.trades = 0
@@ -64,27 +66,7 @@ class BacktestBase(object):
         self.stoploss = 0
         self.entry_price = 0
         self.days_hold = 0
-        self.sequence = SequenceMethod(self.symbol)
-        self.symbol_data_1d = pd.DataFrame()
-        self.symbol_data_1wk = pd.DataFrame()
-        self.symbol_data_1mo = pd.DataFrame()
-        self.get_data()
-        self.start_test = self.symbol_data_1d.index[0]
-        self.hold_yield = (self.symbol_data_1d.Close.iloc[-1] - self.symbol_data_1d.Close.iloc[0])/(self.symbol_data_1d.Close.iloc[0])*100
-
-    def get_data(self):
-        ''' Retrieves and prepares the data.
-        '''
-
-        self.symbol_data_1d = self.sequence.get_data_1d()
-        self.symbol_data_1d = self.symbol_data_1d.set_index('Date')
-        self.symbol_data_1wk = self.sequence.get_data_1wk()
-        self.symbol_data_1wk = self.symbol_data_1wk.set_index('Date')
-        self.symbol_data_1mo = self.sequence.get_data_1mo()
-        self.symbol_data_1mo = self.symbol_data_1mo.set_index('Date')
-        self.symbol_data_1d =  self.symbol_data_1d.loc[self.start:self.end]
-        self.symbol_data_1wk =  self.symbol_data_1wk.loc[self.start:self.end]
-        self.symbol_data_1mo =  self.symbol_data_1mo.loc[self.start:self.end]
+        self.holdings = {}
 
     def plot_data(self, cols=None):
         ''' Plots the closing prices for symbol.
@@ -97,7 +79,7 @@ class BacktestBase(object):
         ''' Return date and price for bar.
         '''
         date = str(self.symbol_data_1d.index[bar])[:10]
-        price = self.symbol_data_1d.Close.iloc[bar]
+        price = self.symbol_data_1d.Open.iloc[bar]
         return date, price
 
     def print_balance(self, bar):
@@ -123,7 +105,7 @@ class BacktestBase(object):
         self.units += units
         self.trades += 1
         if self.verbose:
-            print(f'{date} | selling {units} units at {price:.2f}')
+            print(f'{date} | buying {units} units at {price:.2f}')
             self.print_balance(bar)
             self.print_net_wealth(bar)
 
@@ -160,11 +142,3 @@ class BacktestBase(object):
         if(self.trades == 0): print('Win Rate        [%] 0 ')
         else: print('Win Rate        [%] {:.2f}'.format((self.win_trades/self.trades)*100))
         print('=' * 55)
-
-
-if __name__ == '__main__':
-    bb = BacktestBase('AAPL.O', '2010-1-1', '2019-12-31', 10000)
-    print(bb.data.info())
-    print(bb.data.tail())
-    bb.plot_data()
-    plt.savefig('C:/Users/itayt/Documents/Programming/NewsToGod/Results/backtestbaseplot.png')
