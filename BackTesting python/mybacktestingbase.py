@@ -9,7 +9,7 @@ mpl.rcParams['font.family'] = 'serif'
 
 
 
-class BacktestBase(object):
+class MyBacktestBase(object):
     ''' Base class for event-based backtesting of trading strategies.
 
     Attributes
@@ -57,6 +57,7 @@ class BacktestBase(object):
         self.exposure = exposure
         self.ptc = ptc
         self.ftc = ftc
+        self.trade_money_investing = exposure * amount
         self.money_inside = 0
         self.units = 0
         self.position = 0
@@ -95,10 +96,9 @@ class BacktestBase(object):
         net_wealth = self.units * price + self.amount
         print(f'{date} | current net wealth {net_wealth:.2f}')
 
-    def place_buy_order(self, bar, units=None, amount=None):
-        ''' Place a buy order.
-        '''
-        date, price = self.get_date_price(bar)
+    def place_buy_order(self, symbol):
+        self.holdings[symbol[0]] = {'Avg Price': symbol[1]['Entry Price'], 'Entry Date': symbol[1]['Entry Date']}
+        # date, price = self.get_date_price(bar)
         if units is None:
             units = int(amount / price)
         self.amount -= (units * price) * (1 + self.ptc) + self.ftc
@@ -106,8 +106,8 @@ class BacktestBase(object):
         self.trades += 1
         if self.verbose:
             print(f'{date} | buying {units} units at {price:.2f}')
-            self.print_balance(bar)
-            self.print_net_wealth(bar)
+            # self.print_balance(bar)
+            # self.print_net_wealth(bar)
 
     def place_sell_order(self, bar, units=None, amount=None):
         ''' Place a sell order.
