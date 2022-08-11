@@ -74,7 +74,7 @@ class MyBacktestBase(object):
         self.days_hold = 0
         self.holdings = {}
         self.today = None
-        self.trade_log = pd.DataFrame(columns=['Date','Buy\Sell','Ticker','Position','Buy\Sell Price','Cash','Net Wealth','Total Trades','Portfolio Yield','Win Rate'])
+        self.trade_log = pd.DataFrame(columns=['Date','Buy\Sell','Ticker','Position','Buy\Sell Price','Trade Return','Cash','Net Wealth','Total Trades','Portfolio Yield','Win Rate'])
 
     def plot_data(self, cols=None):
         ''' Plots the closing prices for symbol.
@@ -93,8 +93,7 @@ class MyBacktestBase(object):
     def print_balance(self, entry_date):
         print(f'{entry_date} | current cash {self.cash:.2f}')
 
-    def print_net_wealth(self, entry_date):
-        net_wealth = self.get_new_wealth()
+    def print_net_wealth(self, entry_date,net_wealth):
         print(f'{entry_date} | current net wealth(cash + holdings) {net_wealth:.2f}')
 
     def place_buy_order(self, symbol):
@@ -104,19 +103,20 @@ class MyBacktestBase(object):
         position = int(self.trade_money_investing / entry_price)
         self.cash -= (position * entry_price) + (position * self.ptc) + self.ftc
         self.holdings[symbol[0]] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position}
+        net_wealth = self.get_new_wealth()
         new_row['Ticker'] = symbol[0]
         new_row['Date'] = entry_date
         new_row['Buy\Sell'] = 'Buy'
         new_row['Position'] = position
         new_row['Buy\Sell Price'] = entry_price
         new_row['Cash'] = self.cash
-        new_row['Net Wealth'] = self.get_new_wealth()
+        new_row['Net Wealth'] = net_wealth
         self.trade_log = self.trade_log.append(new_row, ignore_index=True)
         self.trade_log.to_csv(results_path / f"seq_strategy.csv")
         if self.verbose:
             print(f'{entry_date} | buying {symbol[0]}, {position} units at {entry_price:.2f}')
             self.print_balance(entry_date)
-            self.print_net_wealth(entry_date)
+            self.print_net_wealth(entry_date,net_wealth)
 
     def place_sell_order(self, symbol,daily_price):
         new_row = {}
@@ -126,16 +126,19 @@ class MyBacktestBase(object):
         self.trades += 1
         if(self.holdings[symbol]['Avg Price'] < selling_price):
             self.win_trades += 1
+        new_row['Trade Return'] = (selling_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
         del self.holdings[symbol]
+        net_wealth = self.get_new_wealth()
+        self.trade_money_investing = self.exposure * net_wealth
         new_row['Ticker'] = symbol
         new_row['Date'] = self.today
         new_row['Buy\Sell'] = 'Sell'
         new_row['Position'] = position
         new_row['Buy\Sell Price'] = selling_price
         new_row['Cash'] = self.cash
-        new_row['Net Wealth'] = self.get_new_wealth()
+        new_row['Net Wealth'] = net_wealth
         new_row['Total Trades'] = self.trades
-        new_row['Portfolio Yield'] = (self.get_new_wealth() - self.initial_amount)/self.initial_amount*100
+        new_row['Portfolio Yield'] = (net_wealth - self.initial_amount)/self.initial_amount*100
         try:
             new_row['Win Rate'] = self.win_trades/self.trades*100
         except:    
@@ -145,13 +148,16 @@ class MyBacktestBase(object):
         if self.verbose:
             print(f'{self.today} | selling {symbol}, {position} units at {selling_price:.2f}')
             self.print_balance(self.today)
-            self.print_net_wealth(self.today)
+            self.print_net_wealth(self.today,net_wealth)
 
     def close_out(self):
+        symbol_to_sell =[]
         for symbol in self.holdings.items():
-            data_daily = yf.download(symbol[0],start = self.today, end= (self.today +timedelta(days=3)),progress=False)
+            symbol_to_sell.append(symbol[0])
+        for symbol in symbol_to_sell:
+            data_daily = yf.download(symbol,start = self.today, end= (self.today +timedelta(days=3)),progress=False)
             daily_price = data_daily['Open'][0]
-            self.place_sell_order(symbol[0],daily_price)
+            self.place_sell_order(symbol,daily_price)
        
 
 

@@ -24,7 +24,8 @@ class Backtest(MyBacktestBase):
         trading_days = trading_days.index.to_list()
         for i in range(len(trading_days)):
             trading_days[i] = trading_days[i].date()
-        trading_days = trading_days[183:]
+        trading_days = trading_days[391:] # 183, 380
+        trading_days.pop()
         symbol_data_month = pd.DataFrame(yf.download(tickers=symbols, period='max',interval='1mo',progress=False,group_by = 'ticker',threads = True)).dropna()
         symbol_data_weekly = pd.DataFrame(yf.download(tickers=symbols, period='max',interval='1wk',progress=False,group_by = 'ticker',threads = True)).dropna()
         symbol_data_month = symbol_data_month.T
@@ -68,6 +69,7 @@ class Backtest(MyBacktestBase):
                     continue
                 if(in_protfolio):
                     self.place_sell_order(symbol,daily_price)
+                continue
             try:
                 data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
                 data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
