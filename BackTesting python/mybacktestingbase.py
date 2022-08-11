@@ -1,13 +1,20 @@
+from distutils.dep_util import newer_group
 from importlib.metadata import SelectableGroups
+from turtle import position
+from types import new_class
 import numpy as np
 import pandas as pd
 from pylab import mpl, plt
 import yfinance as yf
 from sequencing import SequenceMethod
+from datetime import date,datetime,timedelta
+from pathlib import Path
 plt.style.use('seaborn')
 mpl.rcParams['font.family'] = 'serif'
 
-
+results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
+if not results_path.exists():
+    results_path.mkdir(parents=True)
 
 class MyBacktestBase(object):
     ''' Base class for event-based backtesting of trading strategies.
@@ -58,8 +65,6 @@ class MyBacktestBase(object):
         self.ptc = ptc
         self.ftc = ftc
         self.trade_money_investing = exposure * amount
-        self.money_inside = 0
-        self.units = 0
         self.position = 0
         self.trades = 0
         self.win_trades = 0
@@ -68,6 +73,8 @@ class MyBacktestBase(object):
         self.entry_price = 0
         self.days_hold = 0
         self.holdings = {}
+        self.today = None
+        self.trade_log = pd.DataFrame(columns=['Date','Buy\Sell','Ticker','Position','Buy\Sell Price','Cash','Net Wealth','Total Trades','Portfolio Yield','Win Rate'])
 
     def plot_data(self, cols=None):
         ''' Plots the closing prices for symbol.
@@ -83,62 +90,77 @@ class MyBacktestBase(object):
         price = self.symbol_data_1d.Open.iloc[bar]
         return date, price
 
-    def print_balance(self, bar):
-        ''' Print out current cash balance info.
-        '''
-        date, price = self.get_date_price(bar)
-        print(f'{date} | current balance {self.amount:.2f}')
+    def print_balance(self, entry_date):
+        print(f'{entry_date} | current cash {self.cash:.2f}')
 
-    def print_net_wealth(self, bar):
-        ''' Print out current cash balance info.
-        '''
-        date, price = self.get_date_price(bar)
-        net_wealth = self.units * price + self.amount
-        print(f'{date} | current net wealth {net_wealth:.2f}')
+    def print_net_wealth(self, entry_date):
+        net_wealth = self.get_new_wealth()
+        print(f'{entry_date} | current net wealth(cash + holdings) {net_wealth:.2f}')
 
     def place_buy_order(self, symbol):
-        self.holdings[symbol[0]] = {'Avg Price': symbol[1]['Entry Price'], 'Entry Date': symbol[1]['Entry Date']}
-        # date, price = self.get_date_price(bar)
-        if units is None:
-            units = int(amount / price)
-        self.amount -= (units * price) * (1 + self.ptc) + self.ftc
-        self.units += units
+        new_row = {}
+        entry_price = symbol[1]['Entry Price']
+        entry_date =  symbol[1]['Entry Date']
+        position = int(self.trade_money_investing / entry_price)
+        self.cash -= (position * entry_price) + (position * self.ptc) + self.ftc
+        self.holdings[symbol[0]] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position}
+        new_row['Ticker'] = symbol[0]
+        new_row['Date'] = entry_date
+        new_row['Buy\Sell'] = 'Buy'
+        new_row['Position'] = position
+        new_row['Buy\Sell Price'] = entry_price
+        new_row['Cash'] = self.cash
+        new_row['Net Wealth'] = self.get_new_wealth()
+        self.trade_log = self.trade_log.append(new_row, ignore_index=True)
+        self.trade_log.to_csv(results_path / f"seq_strategy.csv")
+        if self.verbose:
+            print(f'{entry_date} | buying {symbol[0]}, {position} units at {entry_price:.2f}')
+            self.print_balance(entry_date)
+            self.print_net_wealth(entry_date)
+
+    def place_sell_order(self, symbol,daily_price):
+        new_row = {}
+        selling_price = daily_price
+        position = self.holdings[symbol]['Position']
+        self.cash += (position * selling_price) - (position * self.ptc) + self.ftc
         self.trades += 1
+        if(self.holdings[symbol]['Avg Price'] < selling_price):
+            self.win_trades += 1
+        del self.holdings[symbol]
+        new_row['Ticker'] = symbol
+        new_row['Date'] = self.today
+        new_row['Buy\Sell'] = 'Sell'
+        new_row['Position'] = position
+        new_row['Buy\Sell Price'] = selling_price
+        new_row['Cash'] = self.cash
+        new_row['Net Wealth'] = self.get_new_wealth()
+        new_row['Total Trades'] = self.trades
+        new_row['Portfolio Yield'] = (self.get_new_wealth() - self.initial_amount)/self.initial_amount*100
+        try:
+            new_row['Win Rate'] = self.win_trades/self.trades*100
+        except:    
+            new_row['Win Rate'] = 0
+        self.trade_log = self.trade_log.append(new_row, ignore_index=True)
+        self.trade_log.to_csv(results_path / f"seq_strategy.csv")
         if self.verbose:
-            print(f'{date} | buying {units} units at {price:.2f}')
-            # self.print_balance(bar)
-            # self.print_net_wealth(bar)
+            print(f'{self.today} | selling {symbol}, {position} units at {selling_price:.2f}')
+            self.print_balance(self.today)
+            self.print_net_wealth(self.today)
 
-    def place_sell_order(self, bar, units=None, amount=None):
-        ''' Place a sell order.
-        '''
-        date, price = self.get_date_price(bar)
-        if units is None:
-            units = int(amount / price)
-        self.amount += (units * price) * (1 - self.ptc) - self.ftc
-        self.units -= units
-        # self.trades += 1
-        if self.verbose:
-            print(f'{date} | selling {units} units at {price:.2f}')
-            self.print_balance(bar)
-            self.print_net_wealth(bar)
+    def close_out(self):
+        for symbol in self.holdings.items():
+            data_daily = yf.download(symbol[0],start = self.today, end= (self.today +timedelta(days=3)),progress=False)
+            daily_price = data_daily['Open'][0]
+            self.place_sell_order(symbol[0],daily_price)
+       
 
-    def close_out(self, bar):
-        ''' Closing out a long or short position.
-        '''
-        date, price = self.get_date_price(bar)
-        self.amount += self.units * price
-        self.units = 0
-        if(self.position == 1):
-            self.trades += 1
-        if self.verbose:
-            print(f'{date} | inventory {self.units} units at {price:.2f}')
-            print('=' * 55)
-        print('Final balance   [$] {:.2f}'.format(self.amount))
-        perf = ((self.amount - self.initial_amount) /
-                self.initial_amount * 100)
-        print('Net Performance [%] {:.2f}'.format(perf))
-        print('Trades Executed [#] {:.2f}'.format(self.trades))
-        if(self.trades == 0): print('Win Rate        [%] 0 ')
-        else: print('Win Rate        [%] {:.2f}'.format((self.win_trades/self.trades)*100))
-        print('=' * 55)
+
+    def get_new_wealth(self):
+        money_inside = 0
+        for symbol in self.holdings.items():
+            data_daily = yf.download(symbol[0],start = self.today, end= (self.today +timedelta(days=3)),progress=False)
+            today_price = data_daily['Open'][0]
+            position = symbol[1]['Position']
+            money_inside += today_price*position
+        return money_inside + self.cash
+
