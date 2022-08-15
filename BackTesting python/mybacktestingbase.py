@@ -62,6 +62,7 @@ class MyBacktestBase(object):
         self.amount = amount
         self.cash = amount
         self.exposure = exposure
+        self.leverage_amount = 0.02 * self.initial_amount
         self.ptc = ptc
         self.ftc = ftc
         self.trade_money_investing = exposure * amount
@@ -76,19 +77,6 @@ class MyBacktestBase(object):
         self.today = None
         self.trade_log = pd.DataFrame(columns=['Date','Buy\Sell','Ticker','Position','Buy\Sell Price','Trade Return','Cash','Net Wealth','Total Trades','Portfolio Yield','Win Rate'])
 
-    def plot_data(self, cols=None):
-        ''' Plots the closing prices for symbol.
-        '''
-        if cols is None:
-            cols = ['price']
-        self.data['price'].plot(figsize=(10, 6), title=self.symbol)
-
-    def get_date_price(self, bar):
-        ''' Return date and price for bar.
-        '''
-        date = str(self.symbol_data_1d.index[bar])[:10]
-        price = self.symbol_data_1d.Open.iloc[bar]
-        return date, price
 
     def print_balance(self, entry_date):
         print(f'{entry_date} | current cash {self.cash:.2f}')
@@ -96,15 +84,15 @@ class MyBacktestBase(object):
     def print_net_wealth(self, entry_date,net_wealth):
         print(f'{entry_date} | current net wealth(cash + holdings) {net_wealth:.2f}')
 
-    def place_buy_order(self, symbol):
+    def place_buy_order(self, symbol, data_daily):
         new_row = {}
-        entry_price = symbol[1]['Entry Price']
-        entry_date =  symbol[1]['Entry Date']
+        entry_price = data_daily['Open'][0]
+        entry_date =  data_daily.index[0].date()
         position = int(self.trade_money_investing / entry_price)
         self.cash -= (position * entry_price) + (position * self.ptc) + self.ftc
-        self.holdings[symbol[0]] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position}
+        self.holdings[symbol] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position}
         net_wealth = self.get_new_wealth()
-        new_row['Ticker'] = symbol[0]
+        new_row['Ticker'] = symbol
         new_row['Date'] = entry_date
         new_row['Buy\Sell'] = 'Buy'
         new_row['Position'] = position
@@ -114,7 +102,7 @@ class MyBacktestBase(object):
         self.trade_log = self.trade_log.append(new_row, ignore_index=True)
         self.trade_log.to_csv(results_path / f"seq_strategy.csv")
         if self.verbose:
-            print(f'{entry_date} | buying {symbol[0]}, {position} units at {entry_price:.2f}')
+            print(f'{entry_date} | buying {symbol}, {position} units at {entry_price:.2f}')
             self.print_balance(entry_date)
             self.print_net_wealth(entry_date,net_wealth)
 
@@ -130,6 +118,7 @@ class MyBacktestBase(object):
         del self.holdings[symbol]
         net_wealth = self.get_new_wealth()
         self.trade_money_investing = self.exposure * net_wealth
+        self.leverage_amount = 0.02 * net_wealth
         new_row['Ticker'] = symbol
         new_row['Date'] = self.today
         new_row['Buy\Sell'] = 'Sell'

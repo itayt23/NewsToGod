@@ -1,12 +1,14 @@
 from ast import excepthandler
 from importlib.metadata import entry_points
+from lib2to3.pygram import Symbols
 from msilib import sequence
 from pickle import EMPTY_DICT
-from re import T
+from re import M, T
 from sqlite3 import threadsafety
 from tabnanny import verbose
 from timeit import repeat
 import traceback
+from xmlrpc.server import SimpleXMLRPCRequestHandler
 from mybacktestingbase import *
 from sequencing import SequenceMethod
 import talib as ta
@@ -20,21 +22,102 @@ class Backtest(MyBacktestBase):
         symbols = ['IYZ','XLY','XHB', 'PEJ','XLP','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
                 'XLK','FDN','XLU','FIW','FAN','XLRE','XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
     
-        trading_days = pd.DataFrame(yf.download('qqq', period='10y',interval='1wk',progress=False)).dropna()
-        trading_days = trading_days.index.to_list()
-        for i in range(len(trading_days)):
-            trading_days[i] = trading_days[i].date()
-        trading_days = trading_days[391:] # 183, 380
-        trading_days.pop()
+        trading_weeks = pd.DataFrame(yf.download('qqq', period='10y',interval='1wk',progress=False)).dropna()
+        trading_weeks = trading_weeks.index.to_list()
+        for i in range(len(trading_weeks)):
+            trading_weeks[i] = trading_weeks[i].date()
+        trading_weeks = trading_weeks[183:] # 183, 380
+        trading_weeks.pop()
         symbol_data_month = pd.DataFrame(yf.download(tickers=symbols, period='max',interval='1mo',progress=False,group_by = 'ticker',threads = True)).dropna()
         symbol_data_weekly = pd.DataFrame(yf.download(tickers=symbols, period='max',interval='1wk',progress=False,group_by = 'ticker',threads = True)).dropna()
         symbol_data_month = symbol_data_month.T
         symbol_data_weekly = symbol_data_weekly.T
-        for week in trading_days:
+        for week in trading_weeks:
             portfolio.today = week
-            portfolio.check_portfolio(symbols,week,symbol_data_month,symbol_data_weekly)
+            for symbol in symbols:
+                portfolio.check_sell(symbol_data_month,symbol_data_weekly,symbol,week)
+                portfolio.check_buy(symbol_data_month,symbol_data_weekly,symbol,week)
+            # portfolio.check_portfolio(symbols,week,symbol_data_month,symbol_data_weekly)
         portfolio.close_out()
 
+    def rate_stocks(self,symbol_data_month,symbol_data_weekly,symbols,week):
+        symbols_dict = {}
+        rank = 0
+        for symbol in symbols:
+            symbols_dict[symbol] = 0
+            seq_month, seq_weekly = get_sequence_month_week(symbol,symbol_data_month,symbol_data_weekly)
+            avg_weekly_move = seq_weekly.get_avg_up_return()
+            start_move_price = check_seq_price_by_date_weekly(seq_weekly,week)
+            data_daily = yf.download(symbol,start = week, end= (week +timedelta(days=3)),progress=False)
+            daily_price = data_daily['Open'][0]
+            move_return = (daily_price - start_move_price)/start_move_price*100
+            data_weekly = symbol_data_weekly.loc[symbol].T
+            data_monthly = symbol_data_month.loc[symbol].T
+            try:
+                data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
+                data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
+            except:
+                data_weekly = None
+            try:
+                data_monthly['SMA13'] = ta.SMA(data_monthly['Close'],timeperiod=13)
+                data_monthly['SMA5'] = ta.SMA(data_monthly['SMA13'], timeperiod=5)
+            except:
+                data_monthly = None
+            if(check_seq_by_date_weekly(seq_weekly.get_seq_df(),week) == 1):
+                rank += 1
+            if(check_seq_by_date_monthly(seq_month.get_seq_df(),week) == 1):
+                rank += 1
+            if(data_weekly != None and data_weekly.loc[str(week),'SMA13'] > data_weekly.loc[str(week),'SMA5']):
+                rank += 1
+            if(data_monthly != None and data_monthly.loc[str(week),'SMA13'] > data_monthly.loc[str(week),'SMA5']):
+                rank += 1
+            if(move_return <= avg_weekly_move/2):
+                rank += 1
+            
+
+
+    def check_buy(self,symbol_data_month,symbol_data_weekly,symbol,week):
+        if(self.cash - self.trade_money_investing >= ((-1)*self.leverage_amount) and not self.is_holding(symbol)):
+            seq_month, seq_weekly = get_seq_month_week(symbol,week,symbol_data_month,symbol_data_weekly)
+            data_weekly = symbol_data_weekly.loc[symbol].T
+            data_monthly = symbol_data_month.loc[symbol].T
+            try:
+                data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
+                data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
+                # data_monthly['SMA13'] = ta.SMA(data_monthly['Close'],timeperiod=13)
+                # data_monthly['SMA5'] = ta.SMA(data_monthly['SMA13'], timeperiod=5)
+                # # print(data_monthly.head(30))
+                if(seq_month == 1  and seq_weekly == 1 and data_weekly.loc[str(week),'SMA13'] > data_weekly.loc[str(week),'SMA5']):
+                    data_daily = yf.download(symbol,start = week, end= (week +timedelta(days=3)),progress=False)
+                    self.place_buy_order(symbol,data_daily)
+            except Exception:
+                print('No Sma DATA')
+
+    def check_sell(self,symbol_data_month,symbol_data_weekly,symbol,week):
+        if(self.is_holding(symbol)):
+            data_weekly = symbol_data_weekly.loc[symbol].T
+            data_monthly = symbol_data_month.loc[symbol].T
+            data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
+            data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
+            seq_month, seq_weekly = get_seq_month_week(symbol,week,symbol_data_month,symbol_data_weekly)
+            if(seq_weekly == -1  and data_weekly.loc[str(week),'SMA5'] > data_weekly.loc[str(week),'SMA13']):
+                data_daily = yf.download(symbol,start = week, end= (week +timedelta(days=3)),progress=False)
+                daily_price = data_daily['Open'][0]
+                trade_yield = (daily_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
+                if(trade_yield > 7 or trade_yield < 0 or seq_month == -1):
+                    portfolio.place_sell_order(symbol,daily_price)
+ 
+    def check_sell2(self,symbol_data_month,symbol_data_weekly,symbol,week):
+        if(self.is_holding(symbol)):
+            data_weekly = symbol_data_weekly.loc[symbol].T
+            data_monthly = symbol_data_month.loc[symbol].T
+            data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
+            data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
+            seq_month, seq_weekly = get_seq_month_week(symbol,week,symbol_data_month,symbol_data_weekly)
+            if(seq_month == -1 and seq_weekly == -1):
+                data_daily = yf.download(symbol,start = week, end= (week +timedelta(days=3)),progress=False)
+                daily_price = data_daily['Open'][0]
+                portfolio.place_sell_order(symbol,daily_price)
 
     def is_holding(self,symbol):
         for ticker in self.holdings.items():
@@ -90,6 +173,21 @@ class Backtest(MyBacktestBase):
         
 
 
+def get_seq_month_week(symbol,week,symbol_data_month,symbol_data_weekly):
+    data_monthly = symbol_data_month.loc[symbol].T
+    data_weekly = symbol_data_weekly.loc[symbol].T
+    symbol_sequence_monthly = SequenceMethod(data_monthly,'monthly')
+    seq_month = check_seq_by_date_monthly(symbol_sequence_monthly.get_seq_df(),week)
+    symbol_sequence_weekly = SequenceMethod(data_weekly,'weekly')
+    seq_weekly = check_seq_by_date_weekly(symbol_sequence_weekly.get_seq_df(),week)
+    return seq_month, seq_weekly
+
+def get_sequence_month_week(symbol,symbol_data_month,symbol_data_weekly):
+    data_monthly = symbol_data_month.loc[symbol].T
+    data_weekly = symbol_data_weekly.loc[symbol].T
+    symbol_sequence_monthly = SequenceMethod(data_monthly,'monthly')
+    symbol_sequence_weekly = SequenceMethod(data_weekly,'weekly')
+    return symbol_sequence_monthly, symbol_sequence_weekly
 
 def check_seq_by_date_monthly(seq,date):
     previous_row = 0
@@ -112,6 +210,28 @@ def check_seq_by_date_weekly(seq,date):
         else: break
     if(first): return index, 0
     return int(previous_row['Sequence'])
+
+def check_seq_price_by_date_monthly(seq,date):
+    previous_row = 0
+    first = True
+    for index,row in seq.iterrows():
+        if(row["Date"] < date ):
+            previous_row = row
+            first = False
+        else: break
+    if(first): return 0
+    return (previous_row['Entry Price'])
+
+def check_seq_price_by_date_weekly(seq,date):
+    previous_row = 0
+    first = True
+    for index,row in seq.iterrows():
+        if(row["Date"] < date):
+            previous_row = row
+            first = False
+        else: break
+    if(first): return index, 0
+    return (previous_row['Entry Price'])
 
 def check_seq_by_date_daily(seq,date):
     previous_row = 0
