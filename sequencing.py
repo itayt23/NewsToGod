@@ -274,10 +274,10 @@ def build_sequences(self):
 
 class SequenceMethod:
 
-    def __init__(self, data, interval):
+    def __init__(self, data, interval,stop_date):
         self.data = data
         self.interval = interval
-        self.sequence = get_sequence(data,interval)
+        self.sequence = get_sequence(data,interval,stop_date)
 
     def get_last_sequence(self):
         return self.sequence['Sequence'].iloc[-1]
@@ -289,11 +289,12 @@ class SequenceMethod:
         counter = 0
         seq_yield = 0
         avg_yield = 0
-        for index,row in self.sequence.iterrows():
+        seq_df = self.sequence.dropna()
+        for index,row in seq_df.iterrows():
             if(row["Sequence"] == 1):
-                if(row["Yield"] > 0):
-                    counter = counter + 1
-                    seq_yield = seq_yield + row["Yield"]
+                # if(row["Yield"] > 0):
+                counter = counter + 1
+                seq_yield = seq_yield + row["Yield"]
         try:
             avg_yield = seq_yield / counter
         except: return 7
@@ -311,7 +312,7 @@ class SequenceMethod:
         avg_yield = seq_yield / counter
         return avg_yield
 
-def get_sequence(data, interval):
+def get_sequence(data, interval,stop_date):
     symbol_df = data.rename_axis('Date').reset_index()
     sequence = pd.DataFrame(columns=['Date', 'Entry Price', 'Sequence', 'Days', "Yield"])
     seq_df_index = 0
@@ -329,6 +330,8 @@ def get_sequence(data, interval):
         low_price = symbol_df.loc[i-1, "Low"]
         high_price = symbol_df.loc[i-1, "High"]
         date = symbol_df.loc[i, "Date"].date()
+        if(date > stop_date):
+            break
         if(interval == 'monthly'):
             date = date.replace(day = calendar.monthrange(date.year, date.month)[1])
         if(interval == 'weekly'):
