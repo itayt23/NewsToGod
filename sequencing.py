@@ -292,9 +292,9 @@ class SequenceMethod:
         seq_df = self.sequence.dropna()
         for index,row in seq_df.iterrows():
             if(row["Sequence"] == 1):
-                # if(row["Yield"] > 0):
-                counter = counter + 1
-                seq_yield = seq_yield + row["Yield"]
+                if(row["Yield"] > 0):
+                    counter = counter + 1
+                    seq_yield = seq_yield + row["Yield"]
         try:
             avg_yield = seq_yield / counter
         except: return 7

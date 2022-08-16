@@ -68,14 +68,17 @@ class MyBacktestBase(object):
         self.trade_money_investing = exposure * amount
         self.position = 0
         self.trades = 0
+        self.total_gain = 0
+        self.avg_gain = 0
         self.win_trades = 0
         self.verbose = verbose
         self.stoploss = 0
         self.entry_price = 0
         self.days_hold = 0
+        self.hold_entry_price = 0
         self.holdings = {}
         self.today = None
-        self.trade_log = pd.DataFrame(columns=['Date','Buy\Sell','Ticker','Position','Buy\Sell Price','Trade Return','Cash','Net Wealth','Total Trades','Portfolio Yield','Win Rate'])
+        self.trade_log = pd.DataFrame(columns=['Date','Buy\Sell','Ticker','Position','Buy\Sell Price','Trade Return','Cash','Net Wealth','Total Trades','Portfolio Yield','Hold Yield','Avg Gain','Win Rate'])
 
 
     def print_balance(self, entry_date):
@@ -114,7 +117,11 @@ class MyBacktestBase(object):
         self.trades += 1
         if(self.holdings[symbol]['Avg Price'] < selling_price):
             self.win_trades += 1
-        new_row['Trade Return'] = (selling_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
+        trade_return = (selling_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
+        new_row['Trade Return'] = trade_return
+        self.total_gain += trade_return
+        self.avg_gain = self.total_gain / self.trades
+        new_row['Avg Gain'] = self.avg_gain
         del self.holdings[symbol]
         net_wealth = self.get_new_wealth()
         self.trade_money_investing = self.exposure * net_wealth
@@ -147,7 +154,7 @@ class MyBacktestBase(object):
             data_daily = yf.download(symbol,start = self.today, end= (self.today +timedelta(days=3)),progress=False)
             daily_price = data_daily['Open'][0]
             self.place_sell_order(symbol,daily_price)
-       
+
 
 
     def get_new_wealth(self):

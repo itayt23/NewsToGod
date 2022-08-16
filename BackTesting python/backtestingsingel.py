@@ -22,26 +22,39 @@ import calendar
 class Backtest(MyBacktestBase):
 
     def run_seq_strategy(self):
-        symbols = ['QQQ']
-    
-        trading_weeks = pd.DataFrame(yf.download('qqq', period='max',interval='1wk',progress=False)).dropna()
-        trading_weeks = trading_weeks.index.to_list()
+        symbol = 'QQQ'
+        sell_rank = 0
+        buy_rank = 0
+        symbol_data_month = pd.DataFrame(yf.download(tickers=symbol, period='max',interval='1mo',progress=False)).dropna()
+        symbol_data_weekly = pd.DataFrame(yf.download(tickers=symbol, period='max',interval='1wk',progress=False)).dropna()
+        self.hold_entry_price = symbol_data_weekly.iloc[0]['Open']
+        trading_weeks = symbol_data_weekly.index.to_list()
         for i in range(len(trading_weeks)):
             trading_weeks[i] = trading_weeks[i].date()
-        trading_weeks = trading_weeks[100:]
+        # trading_weeks = trading_weeks[100:]
         trading_weeks.pop()
-        symbol_data_month = pd.DataFrame(yf.download(tickers=symbols, period='max',interval='1mo',progress=False)).dropna()
-        symbol_data_weekly = pd.DataFrame(yf.download(tickers=symbols, period='max',interval='1wk',progress=False)).dropna()
         for week in trading_weeks:
-            portfolio.today = week
-            rank = self.buy_rate(symbol_data_month,symbol_data_weekly,symbols,week)
-            print(rank)
-            print('#'*50)
+            self.today = week
+            if(self.is_holding(symbol)):
+                sell_rank = self.sell_rate(symbol_data_month,symbol_data_weekly,symbol,week)
+                if(sell_rank >= 4):
+                    data_daily = yf.download(symbol,start = week, end= (week +timedelta(days=3)),progress=False)
+                    daily_price = data_daily['Open'][0]
+                    trade_yield = (daily_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
+                    if(trade_yield >=4 or trade_yield < 0):
+                        self.place_sell_order(symbol,daily_price)
+            if(self.cash > self.leverage_amount): 
+                buy_rank = self.buy_rate(symbol_data_month,symbol_data_weekly,symbol,week)
+                if(buy_rank >= 4):
+                    data_daily = yf.download(symbol,start = week, end= (week +timedelta(days=3)),progress=False)
+                    self.place_buy_order(symbol,data_daily)
             # for symbol in symbols:
             #     portfolio.check_sell(symbol_data_month,symbol_data_weekly,symbol,week)
             #     portfolio.check_buy(symbol_data_month,symbol_data_weekly,symbol,week)
             # portfolio.check_portfolio(symbols,week,symbol_data_month,symbol_data_weekly)
-        portfolio.close_out()
+        self.close_out()
+        update_hold_yield(self,symbol)
+       
 
     def buy_rate(self,symbol_data_month,symbol_data_weekly,symbol,week):
         rank = 0
@@ -53,7 +66,7 @@ class Backtest(MyBacktestBase):
             daily_price = data_daily['Open'][0]
         except:
             daily_price = None
-        if(daily_price != None): move_return = (daily_price - start_move_price)/start_move_price*100
+        if(daily_price != None and start_move_price != None): move_return = (daily_price - start_move_price)/start_move_price*100
         else: move_return = None
         data_weekly = symbol_data_weekly
         data_monthly = symbol_data_month
@@ -77,23 +90,80 @@ class Backtest(MyBacktestBase):
             rank += 1
         else : return rank
         if(check_seq_by_date_monthly(seq_month.get_seq_df(),week) == 1):
-            rank += 1
+            rank += 2
         try:
             if(first_weekly_date <= week and data_weekly.loc[str(week),'SMA13'] > data_weekly.loc[str(week),'SMA5']):
                 rank += 1
         except:
-            rank += 1
+            rank += 0
         try:
             if(first_monthly_date <= last_month and data_monthly.loc[str(last_month),'SMA13'] > data_monthly.loc[str(last_month),'SMA5']):
                 rank += 1
         except:
-            rank += 1
+            rank += 0
         if(is_moving_away_weekly(data_weekly,week,pre_week)):
             rank += 1
         if(is_moving_away_monthly(data_monthly,last_month,pre_month)):
             rank += 1
         if(move_return != None and move_return <= avg_weekly_move/2):
             rank += 1
+        # if(rank>=4):
+        #     # print(f"AVG UP WEEKLY IS: {avg_weekly_move}")
+        return rank
+
+    def sell_rate(self,symbol_data_month,symbol_data_weekly,symbol,week):
+        rank = 0
+        seq_month, seq_weekly = get_sequence_month_week(symbol,symbol_data_month,symbol_data_weekly,week)
+        avg_weekly_move = seq_weekly.get_avg_up_return()
+        start_move_price = check_seq_price_by_date_weekly(seq_weekly.get_seq_df(),week)
+        try:
+            data_daily = yf.download(symbol,start = week, end= (week +timedelta(days=3)),progress=False)
+            daily_price = data_daily['Open'][0]
+        except:
+            daily_price = None
+        if(daily_price != None): trade_yield = (daily_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
+        else: trade_yield = None
+        data_weekly = symbol_data_weekly
+        data_monthly = symbol_data_month
+        data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
+        data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
+        data_monthly['SMA13'] = ta.SMA(data_monthly['Close'],timeperiod=13)
+        data_monthly['SMA5'] = ta.SMA(data_monthly['SMA13'], timeperiod=5)
+        data_monthly = data_monthly.dropna()
+        data_weekly = data_weekly.dropna()
+        first_monthly_date = data_monthly.index[0].date()
+        first_weekly_date = data_weekly.index[0].date()
+        month = week.replace(day=1)
+        pre_week = week - timedelta(days=7*4)
+        last_month = month - timedelta(days=1) 
+        last_month = last_month.replace(day = 1)
+        pre_month = week.replace(day =1)
+        for i in range(3):
+            pre_month = pre_month - timedelta(days=1)
+            pre_month = pre_month.replace(day = 1)
+        if(check_seq_by_date_weekly(seq_weekly.get_seq_df(),week) == -1):
+            rank += 1
+        else : return rank
+        if(check_seq_by_date_monthly(seq_month.get_seq_df(),week) == -1):
+            rank += 1
+        try:
+            if(first_weekly_date <= week and data_weekly.loc[str(week),'SMA13'] < data_weekly.loc[str(week),'SMA5']):
+                rank += 1
+        except:
+            rank += 1
+        try:
+            if(first_monthly_date <= last_month and data_monthly.loc[str(last_month),'SMA13'] < data_monthly.loc[str(last_month),'SMA5']):
+                rank += 1
+        except:
+            rank += 1
+        if(trade_yield != None and trade_yield >= avg_weekly_move):
+            rank += 1
+        if(trade_yield != None and trade_yield >= avg_weekly_move*1.25):
+            rank += 1
+        if(trade_yield != None and trade_yield >= avg_weekly_move*1.5):
+            rank += 1
+        # if(trade_yield != None and trade_yield >= avg_weekly_move*1.75):
+        #     rank += 1
         return rank
             
     def check_buy(self,symbol_data_month,symbol_data_weekly,symbol,week):
@@ -190,6 +260,15 @@ class Backtest(MyBacktestBase):
                     if(self.cash - portfolio.trade_money_investing >= (-20000) and not self.is_holding(symbol[0])):
                         self.place_buy_order(symbol)
 
+
+def update_hold_yield(self,symbol):
+    data_daily = yf.download(symbol,start = self.today, end= (self.today +timedelta(days=3)),progress=False)
+    daily_price = data_daily['Open'][0]
+    new_row = {}
+    new_row['Hold Yield'] = (daily_price - self.hold_entry_price)/self.hold_entry_price*100
+    self.trade_log = self.trade_log.append(new_row, ignore_index=True)
+    self.trade_log.to_csv(results_path / f"seq_strategy.csv")
+
 def is_moving_away_weekly(data_weekly,week,pre_week):
     try:
         if((data_weekly.loc[str(week),'SMA13'] - data_weekly.loc[str(week),'SMA5']) > (data_weekly.loc[str(week),'SMA13'] - data_weekly.loc[str(week),'SMA5'])):
@@ -256,7 +335,7 @@ def check_seq_by_date_weekly(seq,date):
             previous_row = row
             first = False
         else: break
-    if(first): return index, 0
+    if(first): return 0
     return int(previous_row['Sequence'])
 
 def check_seq_price_by_date_monthly(seq,date):
@@ -278,7 +357,7 @@ def check_seq_price_by_date_weekly(seq,date):
             previous_row = row
             first = False
         else: break
-    if(first): return index, 0
+    if(first): return None
     return (previous_row['Entry Price'])
 
 def check_seq_by_date_daily(seq,date):
@@ -303,7 +382,7 @@ if __name__ == '__main__':
     results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
     if not results_path.exists():
         results_path.mkdir(parents=True)
-    portfolio = Backtest(amount=1000000,start='2016-01-01',end='2022-08-05',ptc=0.005)
+    portfolio = Backtest(amount=1000000,start='2016-01-01',end='2022-08-05',ptc=0.005,exposure=1)
     portfolio.run_seq_strategy()
             
     # for day in trading_days:
