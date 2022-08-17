@@ -32,7 +32,7 @@ class Backtest(MyBacktestBase):
         for i in range(len(trading_weeks)):
             trading_weeks[i] = trading_weeks[i].date()
         # trading_weeks = trading_weeks[100:]
-        trading_weeks.pop()
+        # trading_weeks.pop()
         for week in trading_weeks:
             self.today = week
             if(self.is_holding(symbol)):
@@ -41,8 +41,8 @@ class Backtest(MyBacktestBase):
                     data_daily = yf.download(symbol,start = week, end= (week +timedelta(days=3)),progress=False)
                     daily_price = data_daily['Open'][0]
                     trade_yield = (daily_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
-                    if(trade_yield >=4 or trade_yield < 0):
-                        self.place_sell_order(symbol,daily_price)
+                    # if(trade_yield >=4 or trade_yield < 0):
+                    self.place_sell_order(symbol,daily_price)
             if(self.cash > self.leverage_amount): 
                 buy_rank = self.buy_rate(symbol_data_month,symbol_data_weekly,symbol,week)
                 if(buy_rank >= 4):
@@ -115,6 +115,7 @@ class Backtest(MyBacktestBase):
         rank = 0
         seq_month, seq_weekly = get_sequence_month_week(symbol,symbol_data_month,symbol_data_weekly,week)
         avg_weekly_move = seq_weekly.get_avg_up_return()
+        avg_weekly_down_move = seq_weekly.get_avg_down_return()
         start_move_price = check_seq_price_by_date_weekly(seq_weekly.get_seq_df(),week)
         try:
             data_daily = yf.download(symbol,start = week, end= (week +timedelta(days=3)),progress=False)
@@ -162,8 +163,13 @@ class Backtest(MyBacktestBase):
             rank += 1
         if(trade_yield != None and trade_yield >= avg_weekly_move*1.5):
             rank += 1
-        # if(trade_yield != None and trade_yield >= avg_weekly_move*1.75):
+        if(trade_yield != None and trade_yield >= avg_weekly_move*2):
+            rank += 1
+        # if(trade_yield != None and trade_yield <= avg_weekly_down_move*1.5):
         #     rank += 1
+        # if(trade_yield != None and trade_yield <= avg_weekly_down_move*1.75):
+        #     rank += 1
+        # print(f"AVG DOWN WEEKLY IS: {avg_weekly_down_move}")
         return rank
             
     def check_buy(self,symbol_data_month,symbol_data_weekly,symbol,week):

@@ -300,13 +300,13 @@ class SequenceMethod:
         except: return 7
         return avg_yield
 
-    def get_avg_down_return(self, interval):
+    def get_avg_down_return(self):
         counter = 0
         seq_yield = 0
         avg_yield = 0
         for index,row in self.sequence.iterrows():
             if(row["Sequence"] == -1):
-                if(row["Yield"] > 0):
+                if(row["Yield"] < 0):
                     counter = counter + 1
                     seq_yield = seq_yield + row["Yield"]
         avg_yield = seq_yield / counter
