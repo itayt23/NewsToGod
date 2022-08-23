@@ -309,7 +309,9 @@ class SequenceMethod:
                 if(row["Yield"] < 0):
                     counter = counter + 1
                     seq_yield = seq_yield + row["Yield"]
-        avg_yield = seq_yield / counter
+        try:
+            avg_yield = seq_yield / counter
+        except: return 7
         return avg_yield
 
 def get_sequence(data, interval,stop_date):

@@ -74,11 +74,14 @@ class MyBacktestBase(object):
         self.verbose = verbose
         self.stoploss = 0
         self.entry_price = 0
-        self.days_hold = 0
-        self.hold_entry_price = 0
+        self.total_days_hold = 0
+        benchmark_start = pd.DataFrame(yf.download(tickers='spy', start=start, end= start + timedelta(days=3),interval='1d',progress=False)).dropna()
+        benchmark_end = pd.DataFrame(yf.download(tickers='spy', start=end, end= end + timedelta(days=3),interval='1d',progress=False)).dropna()
+        self.benchmark_yield =  (benchmark_end.iloc[0]['Open'] -benchmark_start.iloc[0]['Open'])/ benchmark_start.iloc[0]['Open']*100
         self.holdings = {}
         self.today = None
-        self.trade_log = pd.DataFrame(columns=['Date','Buy\Sell','Ticker','Position','Buy\Sell Price','Trade Return','Cash','Net Wealth','Total Trades','Portfolio Yield','Hold Yield','Avg Gain','Win Rate'])
+        self.trade_log = pd.DataFrame(columns=['Date','Buy\Sell','Ticker','Position','Buy\Sell Price','Trade Return','Days Hold',
+        'Cash','Net Wealth','Total Trades','Portfolio Yield','Hold Yield','Avg Gain','Avg Days Hold','Win Rate'])
 
 
     def print_balance(self, entry_date):
@@ -93,7 +96,7 @@ class MyBacktestBase(object):
         entry_date =  data_daily.index[0].date()
         position = int(self.trade_money_investing / entry_price)
         self.cash -= (position * entry_price) + (position * self.ptc) + self.ftc
-        self.holdings[symbol] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position}
+        self.holdings[symbol] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position, 'Red Weeks': 0}
         net_wealth = self.get_new_wealth()
         new_row['Ticker'] = symbol
         new_row['Date'] = entry_date
@@ -109,9 +112,13 @@ class MyBacktestBase(object):
             self.print_balance(entry_date)
             self.print_net_wealth(entry_date,net_wealth)
 
-    def place_sell_order(self, symbol,daily_price):
+    def place_sell_order(self, symbol,data_daily):
         new_row = {}
-        selling_price = daily_price
+        selling_price = data_daily['Open'][0]
+        selling_date = data_daily.index[0].date()
+        # selling_date = datetime.strptime(selling_date,'%Y-%m-%d')
+        days_hold = (selling_date - self.holdings[symbol]['Entry Date']).days
+        self.total_days_hold += days_hold
         position = self.holdings[symbol]['Position']
         self.cash += (position * selling_price) - (position * self.ptc) + self.ftc
         self.trades += 1
@@ -126,6 +133,8 @@ class MyBacktestBase(object):
         net_wealth = self.get_new_wealth()
         self.trade_money_investing = self.exposure * net_wealth
         self.leverage_amount = 0.02 * net_wealth
+        new_row['Days Hold'] = days_hold
+        new_row['Avg Days Hold'] = self.total_days_hold / self.trades
         new_row['Ticker'] = symbol
         new_row['Date'] = self.today
         new_row['Buy\Sell'] = 'Sell'
@@ -152,8 +161,11 @@ class MyBacktestBase(object):
             symbol_to_sell.append(symbol[0])
         for symbol in symbol_to_sell:
             data_daily = yf.download(symbol,start = self.today, end= (self.today +timedelta(days=3)),progress=False)
-            daily_price = data_daily['Open'][0]
-            self.place_sell_order(symbol,daily_price)
+            self.place_sell_order(symbol,data_daily)
+        new_row = {}
+        new_row['Hold Yield'] = self.benchmark_yield
+        self.trade_log = self.trade_log.append(new_row, ignore_index=True)
+        self.trade_log.to_csv(results_path / f"seq_strategy.csv")
 
 
 

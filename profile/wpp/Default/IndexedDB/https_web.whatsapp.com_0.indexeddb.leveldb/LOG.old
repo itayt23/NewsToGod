@@ -1,0 +1,26 @@
+2022/08/21-12:30:03.218 33ec Reusing MANIFEST C:\Users\itayt\Documents\Programming\NewsToGod\profile\wpp\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2022/08/21-12:30:03.219 33ec Recovering log #80
+2022/08/21-12:30:03.232 33ec Reusing old log C:\Users\itayt\Documents\Programming\NewsToGod\profile\wpp\Default\IndexedDB\https_web.whatsapp.com_0.indexeddb.leveldb/000080.log 
+2022/08/21-12:30:03.233 33ec Delete type=2 #74
+2022/08/21-12:30:03.233 33ec Delete type=2 #75
+2022/08/21-12:30:03.233 33ec Delete type=2 #76
+2022/08/21-12:30:03.233 33ec Delete type=2 #77
+2022/08/21-12:30:03.233 33ec Delete type=2 #78
+2022/08/21-12:30:03.233 33ec Delete type=2 #81
+2022/08/21-12:30:20.753 1f68 Level-0 table #89: started
+2022/08/21-12:30:20.769 1f68 Level-0 table #89: 1075979 bytes OK
+2022/08/21-12:30:20.771 1f68 Delete type=0 #80
+2022/08/21-12:30:21.775 37a8 Compacting 1@1 + 5@2 files
+2022/08/21-12:30:21.834 37a8 Generated table #90@1: 42711 keys, 2243016 bytes
+2022/08/21-12:30:21.854 37a8 Generated table #91@1: 8741 keys, 2162271 bytes
+2022/08/21-12:30:21.879 37a8 Generated table #92@1: 9103 keys, 2167983 bytes
+2022/08/21-12:30:21.926 37a8 Generated table #93@1: 34858 keys, 2244646 bytes
+2022/08/21-12:30:21.946 37a8 Generated table #94@1: 38687 keys, 1057729 bytes
+2022/08/21-12:30:21.946 37a8 Compacted 1@1 + 5@2 files => 9875645 bytes
+2022/08/21-12:30:21.947 37a8 compacted to: files[ 0 0 5 0 0 0 0 ]
+2022/08/21-12:30:21.947 37a8 Delete type=2 #82
+2022/08/21-12:30:21.947 37a8 Delete type=2 #83
+2022/08/21-12:30:21.947 37a8 Delete type=2 #84
+2022/08/21-12:30:21.947 37a8 Delete type=2 #85
+2022/08/21-12:30:21.947 37a8 Delete type=2 #86
+2022/08/21-12:30:21.947 37a8 Delete type=2 #89
