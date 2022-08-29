@@ -32,6 +32,27 @@ class Portfolio:
 
         print(response.text)
 
+    def sell(self,symbol,quantity,order_type='Market'):
+        #order_type = "Limit" "StopMarket" "Market" "StopLimit"
+        url = "https://api.tradestation.com/v3/orderexecution/orders"
+        payload = {
+            "AccountID": ACCOUNT_ID,
+            "Symbol": symbol,
+            "Quantity": quantity,
+            "OrderType": order_type,
+            "TradeAction": "SELL",
+            "TimeInForce": {"Duration": "DAY"},
+            "Route": "Intelligent"
+        }
+        headers = {
+            "content-type": "application/json",
+            "Authorization": f'Bearer {self.trade_station.TOKENS.access_token}'
+        }
+
+        response = requests.request("POST", url, json=payload, headers=headers)
+
+        print(response.text)
+
 
 
 def get_cash(trade_station):
