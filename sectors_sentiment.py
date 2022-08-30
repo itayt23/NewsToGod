@@ -109,7 +109,7 @@ class SectorsSentiment:
     def get_sentiment(self):
         return score_to_sentiment(self.sentiment) 
     
-    def print_all_sentiment(self):
+    def print_all_sentiment(self): #BETWEEN -1 AND 1 
         print(f'XLB: {self.materials_sentiment}')
         print(f'XLC: {self.communication_sentimennt}')
         print(f'XLY: {self.consumer_discretionary_sentiment}')

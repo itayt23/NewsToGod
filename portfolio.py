@@ -5,6 +5,7 @@ ACCOUNT_ID = 11509188
 BUY_RANK = 5
 SELL_RANK = 5
 TRADE_SIZE = 0.25
+LEVERAGE_SIZE = 0.02
 
 # # self.symbols_basket =  ['IYZ','XLY','XHB', 'PEJ','XLP','XLC','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
 #                 'XLK','FDN','XLU','FIW','FAN','XLRE','XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
@@ -25,11 +26,12 @@ class Portfolio:
 
     def __init__(self,trade_station,market_sentiment,sector_sentiment):
         self.trade_station = trade_station
-        self.cash = get_cash(trade_station)
-        self.equity = get_equity(trade_station)
+        self.cash = self.get_cash()
+        self.equity = self.get_equity()
         self.net_wealth = self.cash + self.equity
-        self.holdings = get_holdings(trade_station)
+        self.holdings = self.get_holdings()
         self.trade_size_cash = TRADE_SIZE * self.net_wealth
+        self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
         self.market_sentiment = market_sentiment
         self.sector_sentiment = sector_sentiment
         self.etfs = {'XLC':['XLC','FIVG','IYZ','VR'],'XLY':['XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ''AWAY','SOCL','BFIT','KROP'],'XLP':['XLP','FTXG','KXI','PBJ'],
@@ -82,73 +84,109 @@ class Portfolio:
         print(response.text)
 
     def run_buy_and_sell_strategy(self):
-        pass
+        sold_symbols = []
+        symbols_sell_ratings = get_sell_rating(self)
+        if(symbols_sell_ratings != None):
+            for symbol in symbols_sell_ratings.items():
+                if(symbol[1]['rank'] >= SELL_RANK):
+                    sold_symbols.append(symbol[0])
+                    self.sell(symbol[0])
+                    self.update_portfolio()
+
+        if(self.cash >= self.trade_size_cash - self.leverage_amount): 
+            symbols_buy_ratings = get_buy_ratings(self)
+            symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
+            for symbol in symbols_buy_ratings.items():
+                if((symbol[1]['rank'] >= BUY_RANK) and (not self.is_holding(symbol[0])) and (self.cash >= self.trade_size_cash - self.leverage_amount) and (symbol[0] not in sold_symbols)):
+                    self.buy(symbol[0])
+                    self.update_portfolio()
+
+
+    def get_cash(self):
+        try:
+            url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
+            headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
+            account_details = requests.request("GET", url, headers=headers)
+            account_details = json.loads(account_details.text)
+            if(account_details['Balances'][0]['AccountID'] == ACCOUNT_ID):
+                return account_details['Balances'][0]['CashBalance']
+            else: 
+                print("PROBLEM WITH FINDING YOUR TRADE STATION ACCOUNT - PROBLEM ACCURED IIN 'get_cash' function")
+                return 0
+        except Exception:
+            print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
+            return 0
+
+    def get_equity(self):
+        try:
+            url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
+            headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
+            account_details = requests.request("GET", url, headers=headers)
+            account_details = json.loads(account_details.text)
+            if(account_details['Balances'][0]['AccountID'] == ACCOUNT_ID):
+                return account_details['Balances'][0]['Equity']
+            else: 
+                print("PROBLEM WITH FINDING YOUR TRADE STATION ACCOUNT - PROBLEM ACCURED IIN 'get_equity' function")
+                return 0
+        except Exception:
+            print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
+            return 0
+
+    def get_holdings(self):
+        holdings = {}
+        try:
+            url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/positions"
+            headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
+            account_details = requests.request("GET", url, headers=headers)
+            account_details = json.loads(account_details.text)
+            for position in account_details['Positions']:
+                if(position['AccountID'] != ACCOUNT_ID):
+                    continue
+                position_id = position["PositionID"]
+                quantity = position["Quantity"]
+                long_short = position["LongShort"]
+                average_price = position["AveragePrice"]
+                trade_yield = position["UnrealizedProfitLossPercent"]
+                total_cost = position["TotalCost"]
+                market_value = position["MarketValue"]
+                holdings[position["Symbol"]] = {"PositionID":position_id,"Quantity":quantity,"LongShort":long_short,
+                    "AveragePrice":average_price,"UnrealizedProfitLossPercent":trade_yield,"TotalCost":total_cost,"MarketValue":market_value}
+            return holdings
+        except Exception:
+            print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
+            return holdings             
+
+    def update_portfolio(self):
+        self.cash = self.get_cash()
+        self.equity = self.get_equity()
+        self.net_wealth = self.cash + self.equity
+        self.holdings = self.get_holdings()
+        self.trade_size_cash = TRADE_SIZE * self.net_wealth
+        self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
 
 def get_best_etfs(self):
     pass
 
-def get_cash(trade_station):
-    try:
-        url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
-        headers = {"Authorization":f'Bearer {trade_station.TOKENS.access_token}'}
-        account_details = requests.request("GET", url, headers=headers)
-        account_details = json.loads(account_details.text)
-        if(account_details['Balances'][0]['AccountID'] == ACCOUNT_ID):
-            return account_details['Balances'][0]['CashBalance']
-        else: 
-            print("PROBLEM WITH FINDING YOUR TRADE STATION ACCOUNT - PROBLEM ACCURED IIN 'get_cash' function")
-            return 0
-    except Exception:
-        print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
-        return 0
-
-def get_equity(trade_station):
-    try:
-        url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
-        headers = {"Authorization":f'Bearer {trade_station.TOKENS.access_token}'}
-        account_details = requests.request("GET", url, headers=headers)
-        account_details = json.loads(account_details.text)
-        if(account_details['Balances'][0]['AccountID'] == ACCOUNT_ID):
-            return account_details['Balances'][0]['Equity']
-        else: 
-            print("PROBLEM WITH FINDING YOUR TRADE STATION ACCOUNT - PROBLEM ACCURED IIN 'get_equity' function")
-            return 0
-    except Exception:
-        print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
-        return 0
-
-def get_holdings(trade_station):
-    holdings = {}
-    try:
-        url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/positions"
-        headers = {"Authorization":f'Bearer {trade_station.TOKENS.access_token}'}
-        account_details = requests.request("GET", url, headers=headers)
-        account_details = json.loads(account_details.text)
-        for position in account_details['Positions']:
-            if(position['AccountID'] != ACCOUNT_ID):
-                continue
-            position_id = position["PositionID"]
-            quantity = position["Quantity"]
-            long_short = position["LongShort"]
-            average_price = position["AveragePrice"]
-            trade_yield = position["UnrealizedProfitLossPercent"]
-            total_cost = position["TotalCost"]
-            market_value = position["MarketValue"]
-            holdings[position["Symbol"]] = {"PositionID":position_id,"Quantity":quantity,"LongShort":long_short,
-                "AveragePrice":average_price,"UnrealizedProfitLossPercent":trade_yield,"TotalCost":total_cost,"MarketValue":market_value}
-        return holdings
-    except Exception:
-        print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
-        return holdings
-
-def get_buy_ratings(self,symbols,today):
+def get_buy_ratings(self):
     rating = {}
     for etf in self.etfs_to_buy:
         symbol_data_day = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1d',progress=False)).dropna()
         symbol_data_month = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1mo',progress=False)).dropna()
         symbol_data_weekly = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1wk',progress=False)).dropna()
-        rating[etf] = self.buy_rate(symbol_data_month,symbol_data_weekly,symbol_data_day,etf)
+        rating[etf] = buy_rate(symbol_data_month,symbol_data_weekly,symbol_data_day,etf)
     return rating
+
+def get_sell_rating(self):
+    rating = {}
+    if(not self.holdings):
+        return None
+    for symbol in self.holdings.items():
+        symbol_data_day = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1d',progress=False)).dropna()
+        symbol_data_month = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1mo',progress=False)).dropna()
+        symbol_data_weekly = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1wk',progress=False)).dropna()
+        rating[symbol[0]] = sell_rate(symbol_data_month,symbol_data_weekly,symbol_data_day,symbol[0])
+    return rating
+
 
 def buy_rate(data_monthly,data_weekly,data_day,etf):
     rank = 0
@@ -229,7 +267,85 @@ def buy_rate(data_monthly,data_weekly,data_day,etf):
 
 
 
+def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol):
+    rank = 0
+    today = date.today()
+    sell_ret = {'day':today,'rank':rank,'today': True}
+    seq_daily = SequenceMethod(data_day,'day',today)
+    seq_weekly = SequenceMethod(data_weekly,'weekly',today)
+    seq_month = SequenceMethod(data_monthly,'monthly',today)
+    avg_weekly_move = seq_weekly.get_avg_up_return()
+    try:
+        data_daily = yf.download(symbol,start = today, end= (today +timedelta(days=5)),progress=False)
+        daily_price = data_daily['Open'][0]
+    except:
+        daily_price = None
+    if(daily_price != None): trade_yield = (daily_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
+    else: trade_yield = None
+    data_weekly = symbol_data_weekly
+    data_monthly = symbol_data_month
+    data_day['SMA13'] = ta.SMA(data_day['Close'],timeperiod=13)
+    data_day['SMA5'] = ta.SMA(data_day['SMA13'], timeperiod=5)
+    data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
+    data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
+    data_monthly['SMA13'] = ta.SMA(data_monthly['Close'],timeperiod=13)
+    data_monthly['SMA5'] = ta.SMA(data_monthly['SMA13'], timeperiod=5)
+    data_monthly = data_monthly.dropna()
+    data_weekly = data_weekly.dropna()
+    first_monthly_date = data_monthly.index[0].date()
+    first_weekly_date = data_weekly.index[0].date()
+    month = today.replace(day=1)
+    last_month = month - timedelta(days=1) 
+    last_month = last_month.replace(day = 1)
+    last_week = today - timedelta(days=today.weekday(), weeks=1)
+    # pre_week = today - timedelta(days=7*4)
+    # pre_month = today.replace(day =1)
+    # for i in range(3):
+    #     pre_month = pre_month - timedelta(days=1)
+    #     pre_month = pre_month.replace(day = 1)
+    
+    if(check_seq_by_date_weekly(seq_weekly.get_seq_df(),today) == -1):
+        rank += 1
+        self.holdings[symbol]['Red Weeks'] = self.holdings[symbol]['Red Weeks'] + 1
+    else :
+        self.holdings[symbol]['Red Weeks'] = 0    
+    if(self.holdings[symbol]['Red Weeks'] >= 2): # WAs 2
+        rank += 1
+    if(check_seq_by_date_monthly(seq_month.get_seq_df(),today) == -1):
+        rank += 2
+    # try:
+    #     if(first_weekly_date <= today and data_weekly.loc[str(last_week),'SMA13'] < data_weekly.loc[str(last_week),'SMA5']):
+    #         rank += 1
+    # except:
+    #     rank += 0
+    try:
+        if(first_monthly_date <= last_month and data_monthly.loc[str(last_month),'SMA13'] < data_monthly.loc[str(last_month),'SMA5']):
+            rank += 1
+    except:
+        rank += 0
+    if(trade_yield != None and trade_yield >= avg_weekly_move*0.75): #Was 0.75
+        rank += 1
+    if(trade_yield != None and trade_yield >= avg_weekly_move):
+        rank += 1
+    if(trade_yield != None and trade_yield >= avg_weekly_move*1.25): #was 2
+        rank += 1
+    if(trade_yield != None and trade_yield >= avg_weekly_move*1.5): #was 3
+        rank += 1
 
+    sell_ret['rank'] = rank
+    sell_ret['day'] = today
+    if(rank >= SELL_RANK):
+        return sell_ret
+
+    for day, row in data_daily.iterrows():
+        if(today == (day - timedelta(days=day.weekday()))):
+            if(row['Close'] < data_day.loc[str(day),'SMA13'] and check_seq_by_date_daily(seq_daily.get_seq_df(),day) == -1): #!NEED TO CHECK IT
+                rank += SELL_RANK
+                sell_ret['rank'] = rank
+                sell_ret['day'] = day
+                sell_ret['today'] = False
+                return sell_ret
+    return sell_ret
 
 
 
@@ -296,40 +412,3 @@ def check_seq_price_by_date_weekly(seq,date):
     if(first): return None
     return (previous_row['Entry Price'])
 
-
-
-# sold_symbols = []
-# symbols_sell_ratings = get_sell_rating(self,week)
-# if(symbols_sell_ratings != None):
-# for symbol in symbols_sell_ratings.items():
-#     if(symbol[1]['rank'] >= SELL_RANK):
-#         try:
-#             day_str = str(symbol[1]['day'].date())
-#         except:
-#             day_str = str(symbol[1]['day'])
-#         day = datetime.strptime(day_str,'%Y-%m-%d')
-#         sold_symbols.append(symbol[0])
-#         data_daily = yf.download(symbol[0],start=day_str, end=(day +timedelta(days=4)).strftime('%Y-%m-%d'),interval='1d',progress=False)
-#         if(symbol[1]['today']):
-#             sell_price = data_daily['Open'][0]
-#         else:
-#             sell_price = data_daily['Open'][1]
-#         self.place_sell_order(symbol[0],data_daily,sell_price)
-
-# if(self.cash > self.leverage_amount): 
-# symbols_buy_ratings = get_buy_ratings(self,symbols,week)
-# symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
-# for symbol in symbols_buy_ratings.items():
-#     if(symbol[1]['rank'] >= BUY_RANK and not self.is_holding(symbol[0]) and self.cash > self.leverage_amount and (symbol[0] not in sold_symbols)):
-#         try:
-#             day_str = str(symbol[1]['day'].date())
-#         except:
-#             day_str = str(symbol[1]['day'])
-#         day = datetime.strptime(day_str,'%Y-%m-%d')
-#         data_daily = yf.download(symbol[0],start = day_str, end= (day +timedelta(days=4)).strftime('%Y-%m-%d'),interval='1d',progress=False)
-#         if(symbol[1]['today']):
-#             buy_price = data_daily['Open'][0]
-#         else:
-#             buy_price = data_daily['Open'][1]
-#         self.place_buy_order(symbol[0],data_daily,buy_price)
-# self.close_out()

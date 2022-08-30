@@ -10,7 +10,7 @@ import calendar
 
 
 SELL_RANK = 5     ##### sell 4 and buy 5 -------> 180%, not so good
-BUY_RANK = 5
+BUY_RANK = 4
 
 # get start of week -> start_week = date - timedelta(days=date.weekday())
 #Add counter of consective red weeks for sell rate

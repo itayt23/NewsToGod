@@ -1,11 +1,7 @@
-from calendar import month, week
-from distutils.command.build_scripts import first_line_re
-from math import fabs
+
 import sys
 import asyncio
-from wsgiref.headers import tspecials
-from sequencing import SequenceMethod
-from regex import F
+from sequencing import SequenceMethod, SequenceMethodSymbol
 from api_context import Context
 from sectors_sentiment import SectorsSentiment
 from sentimentprocessor import SentimentProcessor
@@ -23,8 +19,8 @@ import json
 import traceback
 
 MAX_PROG_BAR = 1000
-sequence_spy = SequenceMethod('SPY')
-sequence_qqq = SequenceMethod('QQQ')
+sequence_spy = SequenceMethodSymbol('SPY')
+sequence_qqq = SequenceMethodSymbol('QQQ')
 layout = Layout()
 window = layout.setWindow(layout.getMainLayout())
 working = False
@@ -272,13 +268,14 @@ def process_user_input():
             else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
         if event == 'Update Data':
             update_ts_data()
+            sectors.print_all_sentiment()
             # sectors.print_all_sentiment()
-            print(f"avg up trend at SPY daily is: {sequence_spy.get_avg_up_return('day')}")
-            print(f"avg up trend at SPY weekly is: {sequence_spy.get_avg_up_return('week')}")
-            print(f"avg up trend at SPY monthly is: {sequence_spy.get_avg_up_return('month')}")
-            print(f"avg up trend at QQQ daily is: {sequence_qqq.get_avg_up_return('day')}")
-            print(f"avg up trend at QQQ weekly is: {sequence_qqq.get_avg_up_return('week')}")
-            print(f"avg up trend at QQQ monthly is: {sequence_qqq.get_avg_up_return('month')}")
+            # print(f"avg up trend at SPY daily is: {sequence_spy.get_avg_up_return('day')}")
+            # print(f"avg up trend at SPY weekly is: {sequence_spy.get_avg_up_return('week')}")
+            # print(f"avg up trend at SPY monthly is: {sequence_spy.get_avg_up_return('month')}")
+            # print(f"avg up trend at QQQ daily is: {sequence_qqq.get_avg_up_return('day')}")
+            # print(f"avg up trend at QQQ weekly is: {sequence_qqq.get_avg_up_return('week')}")
+            # print(f"avg up trend at QQQ monthly is: {sequence_qqq.get_avg_up_return('month')}")
 
         event, values = window.read(timeout=100)
     window.close()
