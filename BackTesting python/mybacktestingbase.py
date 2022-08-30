@@ -90,9 +90,8 @@ class MyBacktestBase(object):
     def print_net_wealth(self, entry_date,net_wealth):
         print(f'{entry_date} | current net wealth(cash + holdings) {net_wealth:.2f}')
 
-    def place_buy_order(self, symbol, data_daily):
+    def place_buy_order(self, symbol, data_daily,entry_price):
         new_row = {}
-        entry_price = data_daily['Open'][0]
         entry_date =  data_daily.index[0].date()
         position = int(self.trade_money_investing / entry_price)
         self.cash -= (position * entry_price) + (position * self.ptc) + self.ftc
@@ -112,9 +111,8 @@ class MyBacktestBase(object):
             self.print_balance(entry_date)
             self.print_net_wealth(entry_date,net_wealth)
 
-    def place_sell_order(self, symbol,data_daily):
+    def place_sell_order(self, symbol,data_daily,selling_price):
         new_row = {}
-        selling_price = data_daily['Open'][0]
         selling_date = data_daily.index[0].date()
         # selling_date = datetime.strptime(selling_date,'%Y-%m-%d')
         days_hold = (selling_date - self.holdings[symbol]['Entry Date']).days
@@ -161,7 +159,8 @@ class MyBacktestBase(object):
             symbol_to_sell.append(symbol[0])
         for symbol in symbol_to_sell:
             data_daily = yf.download(symbol,start = self.today, end= (self.today +timedelta(days=3)),progress=False)
-            self.place_sell_order(symbol,data_daily)
+            sell_price = data_daily['Open'][0]
+            self.place_sell_order(symbol,data_daily,sell_price)
         new_row = {}
         new_row['Hold Yield'] = self.benchmark_yield
         self.trade_log = self.trade_log.append(new_row, ignore_index=True)

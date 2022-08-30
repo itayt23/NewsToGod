@@ -9,7 +9,7 @@ import os
 import calendar
 
 
-SELL_RANK = 5
+SELL_RANK = 5     ##### sell 4 and buy 5 -------> 180%, not so good
 BUY_RANK = 5
 
 # get start of week -> start_week = date - timedelta(days=date.weekday())
@@ -44,11 +44,15 @@ class Backtest(MyBacktestBase):
                             day_str = str(symbol[1]['day'])
                         day = datetime.strptime(day_str,'%Y-%m-%d')
                         sold_symbols.append(symbol[0])
-                        data_daily = yf.download(symbol[0],start=day_str, end=(day +timedelta(days=3)).strftime('%Y-%m-%d'),progress=False)
-                        self.place_sell_order(symbol[0],data_daily)
+                        data_daily = yf.download(symbol[0],start=day_str, end=(day +timedelta(days=4)).strftime('%Y-%m-%d'),interval='1d',progress=False)
+                        if(symbol[1]['today']):
+                            sell_price = data_daily['Open'][0]
+                        else:
+                            sell_price = data_daily['Open'][1]
+                        self.place_sell_order(symbol[0],data_daily,sell_price)
             if(self.cash > self.leverage_amount): 
                 symbols_buy_ratings = get_buy_ratings(self,symbols,week)
-                # symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1],reverse=True)}
+                symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
                 for symbol in symbols_buy_ratings.items():
                     if(symbol[1]['rank'] >= BUY_RANK and not self.is_holding(symbol[0]) and self.cash > self.leverage_amount and (symbol[0] not in sold_symbols)):
                         try:
@@ -56,14 +60,18 @@ class Backtest(MyBacktestBase):
                         except:
                             day_str = str(symbol[1]['day'])
                         day = datetime.strptime(day_str,'%Y-%m-%d')
-                        data_daily = yf.download(symbol[0],start = day_str, end= (day +timedelta(days=3)).strftime('%Y-%m-%d'),progress=False)
-                        self.place_buy_order(symbol[0],data_daily)
+                        data_daily = yf.download(symbol[0],start = day_str, end= (day +timedelta(days=4)).strftime('%Y-%m-%d'),interval='1d',progress=False)
+                        if(symbol[1]['today']):
+                            buy_price = data_daily['Open'][0]
+                        else:
+                            buy_price = data_daily['Open'][1]
+                        self.place_buy_order(symbol[0],data_daily,buy_price)
         self.close_out()
        
 
     def buy_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,week):
         rank = 0
-        buy_ret = {'day':week,'rank':rank}
+        buy_ret = {'day':week,'rank':rank,'today': True}
         seq_month, seq_weekly = get_sequence_month_week(symbol,symbol_data_month,symbol_data_weekly,week)
         seq_daily = SequenceMethod(data_day,'day',week + timedelta(days=6))
         avg_weekly_move = seq_weekly.get_avg_up_return()
@@ -104,16 +112,21 @@ class Backtest(MyBacktestBase):
             return buy_ret
         if(check_seq_by_date_monthly(seq_month.get_seq_df(),week) == 1):
             rank += 2
+        # try:
+        #     if(data_day.loc[str(week),'SMA13'] < data_day.loc[str(week),'SMA5'] and data_day.loc[str(week - timedelta(days=3)),'SMA13'] < data_day.loc[str(week - timedelta(days=3)),'SMA5'] and data_day.loc[str(week - timedelta(days=5)),'SMA13'] < data_day.loc[str(week - timedelta(days=5)),'SMA5']):
+        #         rank += 1
+        # except:
+        #     rank += 0
         try:
-            if(data_day.loc[str(week),'SMA13'] < data_day.loc[str(week),'SMA5'] and data_day.loc[str(week - timedelta(days=3)),'SMA13'] < data_day.loc[str(week - timedelta(days=3)),'SMA5'] and data_day.loc[str(week - timedelta(days=5)),'SMA13'] < data_day.loc[str(week - timedelta(days=5)),'SMA5']):
+            if(data_day.loc[str(week - timedelta(days=3)),'SMA13'] < data_day.loc[str(week - timedelta(days=3)),'SMA5'] and data_day.loc[str(week - timedelta(days=5)),'SMA13'] < data_day.loc[str(week - timedelta(days=5)),'SMA5']):
                 rank += 1
         except:
             rank += 0
-        try:
-            if(first_weekly_date <= week and data_weekly.loc[str(week),'SMA13'] > data_weekly.loc[str(week),'SMA5']):
-                rank += 1
-        except:
-            rank += 0
+        # try:
+        #     if(first_weekly_date <= week and data_weekly.loc[str(week),'SMA13'] > data_weekly.loc[str(week),'SMA5']):
+        #         rank += 1
+        # except:
+        #     rank += 0
         try:
             if(first_monthly_date <= last_month and data_monthly.loc[str(last_month),'SMA13'] > data_monthly.loc[str(last_month),'SMA5']):
                 rank += 1
@@ -133,16 +146,17 @@ class Backtest(MyBacktestBase):
 
         for day, row in data_daily.iterrows():
             if(week == (day - timedelta(days=day.weekday()))):
-                if(row['Close'] > data_day.loc[str(day),'SMA13'] and check_seq_by_date_daily(seq_daily.get_seq_df(),day) == 1):
+                if(row['Close'] > data_day.loc[str(day),'SMA13'] and check_seq_by_date_daily2(seq_daily.get_seq_df(),day) == 1):
                     rank += BUY_RANK
                     buy_ret['rank'] = rank
                     buy_ret['day'] = day
+                    buy_ret['today'] = False
                     return buy_ret
         return buy_ret
 
     def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,week):
         rank = 0
-        sell_ret = {'day':week,'rank':rank}
+        sell_ret = {'day':week,'rank':rank,'today':True}
         seq_month, seq_weekly = get_sequence_month_week(symbol,symbol_data_month,symbol_data_weekly,week)
         seq_daily = SequenceMethod(data_day,'day',week + timedelta(days=6))
         avg_weekly_move = seq_weekly.get_avg_up_return()
@@ -166,13 +180,14 @@ class Backtest(MyBacktestBase):
         first_monthly_date = data_monthly.index[0].date()
         first_weekly_date = data_weekly.index[0].date()
         month = week.replace(day=1)
-        pre_week = week - timedelta(days=7*4)
         last_month = month - timedelta(days=1) 
         last_month = last_month.replace(day = 1)
-        pre_month = week.replace(day =1)
-        for i in range(3):
-            pre_month = pre_month - timedelta(days=1)
-            pre_month = pre_month.replace(day = 1)
+        last_week = week - timedelta(days=week.weekday(), weeks=1)
+        # pre_week = week - timedelta(days=7*4)
+        # pre_month = week.replace(day =1)
+        # for i in range(3):
+        #     pre_month = pre_month - timedelta(days=1)
+        #     pre_month = pre_month.replace(day = 1)
         
         if(check_seq_by_date_weekly(seq_weekly.get_seq_df(),week) == -1):
             rank += 1
@@ -183,17 +198,17 @@ class Backtest(MyBacktestBase):
             rank += 1
         if(check_seq_by_date_monthly(seq_month.get_seq_df(),week) == -1):
             rank += 2
-        try:
-            if(first_weekly_date <= week and data_weekly.loc[str(week),'SMA13'] < data_weekly.loc[str(week),'SMA5']):
-                rank += 1
-        except:
-            rank += 0
+        # try:
+        #     if(first_weekly_date <= week and data_weekly.loc[str(last_week),'SMA13'] < data_weekly.loc[str(last_week),'SMA5']):
+        #         rank += 1
+        # except:
+        #     rank += 0
         try:
             if(first_monthly_date <= last_month and data_monthly.loc[str(last_month),'SMA13'] < data_monthly.loc[str(last_month),'SMA5']):
                 rank += 1
         except:
             rank += 0
-        if(trade_yield != None and trade_yield >= avg_weekly_move*0.75): 
+        if(trade_yield != None and trade_yield >= avg_weekly_move*0.75): #Was 0.75
             rank += 1
         if(trade_yield != None and trade_yield >= avg_weekly_move):
             rank += 1
@@ -209,10 +224,11 @@ class Backtest(MyBacktestBase):
 
         for day, row in data_daily.iterrows():
             if(week == (day - timedelta(days=day.weekday()))):
-                if(row['Close'] < data_day.loc[str(day),'SMA13'] and check_seq_by_date_daily(seq_daily.get_seq_df(),day) == -1):
+                if(row['Close'] < data_day.loc[str(day),'SMA13'] and check_seq_by_date_daily2(seq_daily.get_seq_df(),day) == -1):
                     rank += SELL_RANK
                     sell_ret['rank'] = rank
                     sell_ret['day'] = day
+                    sell_ret['today'] = False
                     return sell_ret
         return sell_ret
 
@@ -253,7 +269,7 @@ def update_hold_yield(self,symbol):
 
 def is_moving_away_weekly(data_weekly,week,pre_week):
     try:
-        if((data_weekly.loc[str(week),'SMA13'] - data_weekly.loc[str(week),'SMA5']) > (data_weekly.loc[str(week),'SMA13'] - data_weekly.loc[str(week),'SMA5'])):
+        if((data_weekly.loc[str(week),'SMA13'] - data_weekly.loc[str(week),'SMA5']) > (data_weekly.loc[str(pre_week),'SMA13'] - data_weekly.loc[str(pre_week),'SMA5'])):
             return True
     except:
         return False
@@ -309,6 +325,17 @@ def check_seq_by_date_daily(seq,date):
     first = True
     for index,row in seq.iterrows():
         if(row["Date"] < date):
+            previous_row = row
+            first = False
+        else: break
+    if(first): return 0
+    return int(previous_row['Sequence'])
+
+def check_seq_by_date_daily2(seq,date):
+    previous_row = 0
+    first = True
+    for index,row in seq.iterrows():
+        if(row["Date"] <= date):
             previous_row = row
             first = False
         else: break
