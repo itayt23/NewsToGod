@@ -81,6 +81,16 @@ def run_sectors_sentiment():
     window["-PROG-"].UpdateBar(MAX_PROG_BAR)
     print(f"program was finish successfully! =)")
 
+def run_my_strategy():
+    global working, sectors, portfolio
+    bar_thread = threading.Thread(target=update_progrees_bar)
+    bar_thread.start()
+    portfolio.run_buy_and_sell_strategy()
+    working = False
+    bar_thread.join()
+    window["-PROG-"].UpdateBar(MAX_PROG_BAR)
+    print(f"Strategy was finish successfully! =) -> check your portfolio")
+
 def run_news_processor(news_num):
     news = SentimentProcessor(news_num)
     news.run_market_articles_processor()
@@ -114,6 +124,14 @@ def get_sectors_sentiment():
         working = True
         window["-PROG-"].UpdateBar(1)
         window.perform_long_operation(run_sectors_sentiment, '-OPERATION DONE-')
+    else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
+
+def run_strategy():
+    global window, working
+    if not working:
+        working = True
+        window["-PROG-"].UpdateBar(1)
+        window.perform_long_operation(run_my_strategy, '-OPERATION DONE-')
     else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
 
 def connect_trade_station():
@@ -242,7 +260,7 @@ def get_account_details():
         account_details = json.loads(account_details.text)
         window['-ACCOUNT_ID-'].update(account_details['Balances'][0]['AccountID'])
         window['-ACCOUNT_CASH-'].update(account_details['Balances'][0]['CashBalance'])
-        window['-ACCOUNT_EQUITY-'].update(account_details['Balances'][0]['Equity'])
+        window['-ACCOUNT_EQUITY-'].update(account_details['Balances'][0]['MarketValue'])
         working = False
     except Exception:
         print(f"problem connection TradeStation Api, Details: \n {traceback.format_exc()}")
@@ -274,7 +292,9 @@ def process_user_input():
                 connect_trade_station()
             else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
         if event == 'Run Strategy':
-            portfolio.run_buy_and_sell_strategy()
+           run_strategy()
+        if event == 'Show Account':
+           update_ts_data()
         event, values = window.read(timeout=100)
     window.close()
     sys.exit()
