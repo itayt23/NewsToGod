@@ -27,6 +27,7 @@ working = False
 sectors = markets = "None"
 ts_manager = 0
 ts_connect = False
+portfolio = None
 # object_path = Path.cwd() / 'Results' / 'objects files' / 'Markets' 
 # object_path = str(object_path)
 # markets_file = open(object_path + f"/Markets_{date.today()}.obj","rb")
@@ -34,6 +35,11 @@ ts_connect = False
 
 # window.close()
 # window = sg.Window('Caller Finder',layout.getWhatsAppLayout(), size=(750,350),element_justification='c')
+
+#TODO: SHOW HOLDINGS BUTTON
+#TODO: SHOW ORDERS BUTTON
+#TODO: SHOW PORTFOLIO BUTTON
+#TODO: RUN BUY AND SELL ALGO
 
 def run_market_recommendation():
     global working, markets, window, sequence_spy, sequence_qqq
@@ -243,13 +249,14 @@ def get_account_details():
     print('Finish')
 
 def process_user_input():
-    global window, working, sectors, markets, ts_connect,ts_manager,sequence_qqq,sequence_spy
+    global window, working, sectors, markets, ts_connect,ts_manager,sequence_qqq,sequence_spy, portfolio
     start_time = time.time()
     first_connect = True
     event, values = window.read(timeout=100)
     while not (event == sg.WIN_CLOSED or event=="Exit"):
         if ts_connect and first_connect:
             if first_connect:
+                portfolio = Portfolio(ts_manager,markets,sectors)
                 window.close()
                 window = layout.setWindow(layout.get_tradestation_layout())
                 first_connect = False
@@ -266,20 +273,8 @@ def process_user_input():
             if sectors != "None" and markets != "None":
                 connect_trade_station()
             else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
-        if event == 'Update Data':
-            # update_ts_data()
-            sectors.get_materials_sentiment()
-            portfolio = Portfolio(ts_manager,markets,sectors)
+        if event == 'Run Strategy':
             portfolio.run_buy_and_sell_strategy()
-            sectors.print_all_sentiment()
-            # sectors.print_all_sentiment()
-            # print(f"avg up trend at SPY daily is: {sequence_spy.get_avg_up_return('day')}")
-            # print(f"avg up trend at SPY weekly is: {sequence_spy.get_avg_up_return('week')}")
-            # print(f"avg up trend at SPY monthly is: {sequence_spy.get_avg_up_return('month')}")
-            # print(f"avg up trend at QQQ daily is: {sequence_qqq.get_avg_up_return('day')}")
-            # print(f"avg up trend at QQQ weekly is: {sequence_qqq.get_avg_up_return('week')}")
-            # print(f"avg up trend at QQQ monthly is: {sequence_qqq.get_avg_up_return('month')}")
-
         event, values = window.read(timeout=100)
     window.close()
     sys.exit()

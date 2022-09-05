@@ -1,3 +1,5 @@
+from itertools import count
+from os import stat
 from statistics import quantiles
 from sequencing import *
 import talib as ta
@@ -5,11 +7,15 @@ import requests
 import json
 import traceback
 from functools import reduce
+import time
 ACCOUNT_ID = 11509188
 BUY_RANK = 5
 SELL_RANK = 5
 TRADE_SIZE = 0.25
 LEVERAGE_SIZE = 0.02
+SUCCESS = 1
+FAILED_ORDER = -1
+FAIL = 0
 
 # # self.symbols_basket =  ['IYZ','XLY','XHB', 'PEJ','XLP','XLC','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
 #                 'XLK','FDN','XLU','FIW','FAN','XLRE','XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
@@ -36,6 +42,8 @@ class Portfolio:
         self.holdings = self.get_holdings()
         self.trade_size_cash = TRADE_SIZE * self.net_wealth
         self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
+        self.sell_orders = {}
+        self.buy_orders = {}
         self.market_sentiment = market_sentiment
         self.sectors_sentiment = sectors_sentiment
         self.etfs = {'XLC':['XLC','FIVG','IYZ','VR'],'XLY':['XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ''AWAY','SOCL','BFIT','KROP'],'XLP':['XLP','FTXG','KXI','PBJ'],
@@ -63,8 +71,9 @@ class Portfolio:
         }
 
         response = requests.request("POST", url, json=payload, headers=headers)
+        response =  json.loads(response.text)
 
-        print(response.text)
+        return response
 
     def sell(self,symbol,quantity,order_type='Market'):
         #order_type = "Limit" "StopMarket" "Market" "StopLimit"
@@ -84,18 +93,21 @@ class Portfolio:
         }
 
         response = requests.request("POST", url, json=payload, headers=headers)
+        response =  json.loads(response.text)
 
-        print(response.text)
+        return response
 
     def run_buy_and_sell_strategy(self):
         sold_symbols = []
+        # self.get_orders() #Price
         symbols_sell_ratings = get_sell_rating(self)
         if(symbols_sell_ratings != None):
             for symbol in symbols_sell_ratings.items():
                 if(symbol[1]['rank'] >= SELL_RANK):
                     sold_symbols.append(symbol[0])
                     size = self.holdings[symbol[0]]['Quantity']
-                    self.sell(symbol[0],size) #! need to take quantities
+                    self.sell(symbol[0],size) 
+                    if(self.wait_for_confirm_sell_order(symbol[0]) != SUCCESS): return
                     self.update_portfolio()
 
         if(self.cash >= self.trade_size_cash - self.leverage_amount): 
@@ -104,11 +116,46 @@ class Portfolio:
             for symbol in symbols_buy_ratings.items():
                 if((symbol[1]['rank'] >= BUY_RANK) and (not self.is_holding(symbol[0])) and (self.cash >= self.trade_size_cash - self.leverage_amount) and (symbol[0] not in sold_symbols)):
                     size = int(self.trade_size_cash / float(symbol[1]['price']))
-                    self.buy(symbol[0], size)
-                    #! BEFORE UPDATING PROTFOLIO NEED TO WAIT FOR CONFIRMATION 
+                    status = self.buy(symbol[0], size)
+                    try:
+                        print(f"Error Type: {status['Error']}\nError Message: {status['Message']}\nProgram was stopped")
+                        return
+                    except:
+                        print(status['Orders'][0]['Message'])
+                    if(self.wait_for_confirm_buy_order(symbol[0], size) != SUCCESS): return
                     self.update_portfolio()
 
+    def wait_for_confirm_buy_order(self, symbol, size):
+        finish_buy = False
+        counter = 0
+        while(not finish_buy and counter < 10):
+            self.holdings = self.get_holdings()
+            if(self.is_holding(symbol)):
+                if(self.holdings[symbol]['Quantity'] == size):
+                    finish_buy = True
+            time.sleep(2)
+            counter += 1
+        if(counter == 10):
+            print(f'{symbol}: Order still not confirmed, Closing Strategy\nPlease check order Status')
+            return FAILED_ORDER
+        print(f'{symbol} Order confirmed')
+        return SUCCESS
 
+    def wait_for_confirm_sell_order(self, symbol):
+        finish_sell = False
+        counter = 0
+        while(not finish_sell and counter < 10):
+            self.holdings = self.get_holdings()
+            if(not self.is_holding(symbol)):
+                    finish_sell = True
+            time.sleep(2)
+            counter += 1
+        if(counter == 10):
+            print(f'{symbol}: Order still not confirmed, Closing Strategy\nPlease check order Status')
+            return FAILED_ORDER
+        print(f'{symbol} Order confirmed')
+        return SUCCESS
+        
     def get_cash(self):
         try:
             url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
@@ -174,6 +221,14 @@ class Portfolio:
             print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
             return holdings             
 
+
+    def get_orders(self):
+        url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/orders"
+        headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
+        orders_details = requests.request("GET", url, headers=headers)
+        orders_details = json.loads(orders_details.text)
+        print(orders_details)
+
     def update_portfolio(self):
         self.cash = self.get_cash()
         self.equity = self.get_equity()
@@ -181,6 +236,9 @@ class Portfolio:
         self.holdings = self.get_holdings()
         self.trade_size_cash = TRADE_SIZE * self.net_wealth
         self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
+
+    def update_orders(self):
+        pass
 
     def is_holding(self,symbol):
         for ticker in self.holdings.items():
