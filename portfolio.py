@@ -1,6 +1,9 @@
-from NewsToGod import *
 from sequencing import *
 import talib as ta
+import requests
+import json
+import traceback
+from functools import reduce
 ACCOUNT_ID = 11509188
 BUY_RANK = 5
 SELL_RANK = 5
@@ -24,7 +27,7 @@ LEVERAGE_SIZE = 0.02
 
 class Portfolio:
 
-    def __init__(self,trade_station,market_sentiment,sector_sentiment):
+    def __init__(self,trade_station,market_sentiment,sectors_sentiment):
         self.trade_station = trade_station
         self.cash = self.get_cash()
         self.equity = self.get_equity()
@@ -33,7 +36,7 @@ class Portfolio:
         self.trade_size_cash = TRADE_SIZE * self.net_wealth
         self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
         self.market_sentiment = market_sentiment
-        self.sector_sentiment = sector_sentiment
+        self.sectors_sentiment = sectors_sentiment
         self.etfs = {'XLC':['XLC','FIVG','IYZ','VR'],'XLY':['XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ''AWAY','SOCL','BFIT','KROP'],'XLP':['XLP','FTXG','KXI','PBJ'],
                     'XLE':['XLE','XES','CNRG','FTXN','SOLR','ICLN'],'XLF':['XLF','KIE','KCE','KRE'],'XLV':['XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC'],
                     'XLI':['XLI','AIRR','IFRA','IGF','SIMS'],'XLK':['XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR'],'XLU':['XLU','RNRG','FIW','FAN'],
@@ -108,10 +111,10 @@ class Portfolio:
             headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
             account_details = requests.request("GET", url, headers=headers)
             account_details = json.loads(account_details.text)
-            if(account_details['Balances'][0]['AccountID'] == ACCOUNT_ID):
-                return account_details['Balances'][0]['CashBalance']
+            if(int(account_details['Balances'][0]['AccountID']) == ACCOUNT_ID):
+                return float(account_details['Balances'][0]['CashBalance'])
             else: 
-                print("PROBLEM WITH FINDING YOUR TRADE STATION ACCOUNT - PROBLEM ACCURED IIN 'get_cash' function")
+                print("PROBLEM WITH FINDING YOUR TRADE STATION ACCOUNT - PROBLEM ACCURED IN 'get_cash' function")
                 return 0
         except Exception:
             print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
@@ -123,10 +126,10 @@ class Portfolio:
             headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
             account_details = requests.request("GET", url, headers=headers)
             account_details = json.loads(account_details.text)
-            if(account_details['Balances'][0]['AccountID'] == ACCOUNT_ID):
-                return account_details['Balances'][0]['Equity']
+            if(int(account_details['Balances'][0]['AccountID']) == ACCOUNT_ID):
+                return float(account_details['Balances'][0]['MarketValue'])
             else: 
-                print("PROBLEM WITH FINDING YOUR TRADE STATION ACCOUNT - PROBLEM ACCURED IIN 'get_equity' function")
+                print("PROBLEM WITH FINDING YOUR TRADE STATION ACCOUNT - PROBLEM ACCURED IN 'get_equity' function")
                 return 0
         except Exception:
             print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
@@ -165,7 +168,34 @@ class Portfolio:
         self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
 
 def get_best_etfs(self):
-    pass
+    sectors_dict = {}
+    sectors_to_buy = []
+    counter = 0
+    sectors_dict['XLB'] = self.sectors_sentiment.get_materials_sentiment()
+    sectors_dict['XLC'] = self.sectors_sentiment.get_communication_sentimennt()
+    sectors_dict['XLY'] = self.sectors_sentiment.get_consumer_discretionary_sentiment()
+    sectors_dict['XLP'] = self.sectors_sentiment.get_consumer_staples_sentiment()
+    sectors_dict['XLE'] = self.sectors_sentiment.get_energy_sentiment()
+    sectors_dict['XLV'] = self.sectors_sentiment.get_healthcare_sentiment()
+    sectors_dict['XLF'] = self.sectors_sentiment.get_finance_sentiment()
+    sectors_dict['XLI'] = self.sectors_sentiment.get_industrial_sentiment()
+    sectors_dict['XLK'] = self.sectors_sentiment.get_technology_sentiment()
+    sectors_dict['XLU'] = self.sectors_sentiment.get_utilities_sentiment()
+    sectors_dict['XLRE'] = self.sectors_sentiment.get_real_estate_sentiment()
+
+    sectors_dict = {key:value for key, value in sorted(sectors_dict.items(), key=lambda x: x[1],reverse=True)}
+    
+    for key,value in sectors_dict.items():
+        if(counter == 2):
+            break
+        if(value >= 0):
+            counter += 1
+            sectors_to_buy.append(self.etfs[key])
+
+    sectors_to_buy = reduce(lambda x,y: x+y, sectors_to_buy)
+    return sectors_to_buy
+
+
 
 def get_buy_ratings(self):
     rating = {}

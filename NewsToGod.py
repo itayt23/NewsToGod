@@ -1,4 +1,3 @@
-
 import sys
 import asyncio
 from sequencing import SequenceMethod, SequenceMethodSymbol
@@ -17,6 +16,7 @@ from datetime import datetime, timedelta, date
 import requests
 import json
 import traceback
+from portfolio import Portfolio
 
 MAX_PROG_BAR = 1000
 sequence_spy = SequenceMethodSymbol('SPY')
@@ -267,7 +267,10 @@ def process_user_input():
                 connect_trade_station()
             else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
         if event == 'Update Data':
-            update_ts_data()
+            # update_ts_data()
+            sectors.get_materials_sentiment()
+            portfolio = Portfolio(ts_manager,markets,sectors)
+            portfolio.run_buy_and_sell_strategy()
             sectors.print_all_sentiment()
             # sectors.print_all_sentiment()
             # print(f"avg up trend at SPY daily is: {sequence_spy.get_avg_up_return('day')}")

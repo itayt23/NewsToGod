@@ -121,6 +121,40 @@ class SectorsSentiment:
         print(f'XLK: {self.technology_sentiment}')
         print(f'XLU: {self.utilities_sentiment}')
         print(f'XLRE: {self.real_estate_sentiment}')
+
+    def get_materials_sentiment(self):
+        return self.materials_sentiment
+
+    def get_communication_sentimennt(self):
+        return self.communication_sentimennt
+
+    def get_consumer_discretionary_sentiment(self):
+        return self.consumer_discretionary_sentiment
+
+    def get_consumer_staples_sentiment(self):
+        return self.consumer_staples_sentiment
+
+    def get_energy_sentiment(self):
+        return self.energy_sentiment
+
+    def get_healthcare_sentiment(self):
+        return self.healthcare_sentiment
+
+    def get_finance_sentiment(self):
+        return self.finance_sentiment
+
+    def get_industrial_sentiment(self):
+        return self.industrial_sentiment
+
+    def get_technology_sentiment(self):
+        return self.technology_sentiment
+
+    def get_utilities_sentiment(self):
+        return self.utilities_sentiment
+
+    def get_real_estate_sentiment(self):
+        return self.real_estate_sentiment
+
 def download_symbol_data(sector):
     try:
         sector_1d = yf.download(sector,period='5y',interval='1d')
