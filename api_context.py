@@ -105,10 +105,10 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'text/html; charset=utf-8')
             self.end_headers()
             self.wfile.write(Pages.getDone())
-            time.sleep(1.5) # i added it beacuse sometimes it stuck
             # User has logged in - terminate localhost server
             thread = threading.Thread(target=Context.HTTPD.shutdown, daemon=True)
             thread.start()
+            time.sleep(2.5) # i added it beacuse sometimes it stuck
             
 
             return

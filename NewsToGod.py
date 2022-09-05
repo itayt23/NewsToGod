@@ -286,21 +286,6 @@ def process_user_input():
 
 
 if __name__ == '__main__':
-    #semiconductors, green_tech
-
-    
-    etfs_xlc = ['XLC','FIVG','IYZ','VR']
-    etfs_xly = ['XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ''AWAY','SOCL','BFIT','KROP']
-    etfs_xlp = ['XLP','FTXG','KXI','PBJ']
-    etfs_xle = ['XLE','XES','CNRG','FTXN','SOLR','ICLN']
-    etfs_xlf = ['XLF','KIE','KCE','KRE']
-    etfs_xlv = ['XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC']
-    etfs_xli = ['XLI','AIRR','IFRA','IGF','SIMS']
-    etfs_xlk = ['XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR']
-    etfs_xlu = ['XLU','RNRG','FIW','FAN']
-    etfs_xlre = ['XLRE','KBWY','SRVR','VPN','GRNR'] #VPN, GRNR
-    etfs_xlb = ['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
-    etfs_extra = ['PBD','XT','ACES','DRIV','PBW','IPAY','MJ','VCLN','POTX','HYDR','WNDY','MJUS','JETS','TOKE','BOTZ','OCEN','SPFF']
     
     process_user_input()
 
