@@ -8,10 +8,9 @@ class Layout:
 
         self.layout_main = [
         [sg.T("")],
-        [sg.Button("Get Recommendation",font=('11')),sg.VSeparator(),sg.Text("recommendation: ",font=('13')),sg.Text(text_color='white',font=('16'),key='-RECOMMENDATION-')],
+        [sg.Button("Get Market Sentiment",font=('11')),sg.T(" "),sg.VSeparator(),sg.T(" "),sg.Button("Get Sectors Sentiment",font=('11'))],
         [sg.T("")],
         [sg.T("")],
-        [sg.Button("Get Sectors Sentiment",font=('11')), sg.T("     ")],
         [sg.Button("Load Markets Recommendation",font=('11')), sg.T("     "),sg.Button("Load Sectors Sentiment",font=('11')), sg.T("     ")],
         [sg.T("")],
         [sg.T("")],
@@ -22,8 +21,8 @@ class Layout:
         [sg.Button("Exit",size=(8,1),font=('12'))]]
 
         account_details_column = [
-        [sg.Button("Run Strategy",font=('12'),button_color=('black','goldenrod2'))],
-        [sg.Button("Show Account",font=('12')),sg.Button("Show Portfolio",font=('12')),sg.Button("Show Orders",font=('12'))],
+        [sg.Button("Run Full Automate Strategy",font=('16'),button_color=('black','goldenrod2')), sg.T("     "), sg.Button("Run Semi Automate Strategy",font=('16'),button_color=('black','goldenrod2'))],
+        [sg.Button("Update Account",font=('12')),sg.Button("Show Portfolio",font=('12')),sg.Button("Show Orders",font=('12'))],
         [sg.Text("Sectors Sentiment: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-SECTORS_SENTIMENT-'),sg.Text("Markets Sentiment: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-MARKETS_SENTIMENT-')],
         [sg.Text("Account ID: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-ACCOUNT_ID-')],
         [sg.Text("Cash Balance: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-ACCOUNT_CASH-')],
@@ -31,12 +30,13 @@ class Layout:
         ]
 
         orders_column = [
-        [sg.Text("Symbol: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-SYMBOL-')],
-        [sg.Text("Position: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-POSITION-')],
-        [sg.Text("Order type: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-ORDER_TYPE-')]]
+        [sg.Text("Today Return: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-TODAY_RETURN-')],
+        [sg.Text("Realized Return: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-REALIZED_RETURN-')],
+        [sg.Text("Unrealized Return: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-UNREALIZED_RETURN-')]]
 
         self.tradestation_layout = [
         [sg.Column(account_details_column,justification='left'),sg.VSeparator(pad=(200,0)),sg.Column(orders_column)],
+        [sg.T("")],
         [sg.Output(key='-OUT1-', size=(150, 20))],
         [sg.Button("Exit",size=(8,1),font=('12'))]]             
 

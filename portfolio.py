@@ -1,6 +1,4 @@
-from itertools import count
-from os import stat
-from statistics import quantiles
+import PySimpleGUI as sg
 from sequencing import *
 import talib as ta
 import requests
@@ -8,6 +6,8 @@ import json
 import traceback
 from functools import reduce
 import time
+import tkinter as tk
+from tkinter import messagebox
 ACCOUNT_ID = 11509188
 BUY_RANK = 5
 SELL_RANK = 5
@@ -97,15 +97,14 @@ class Portfolio:
 
         return response
 
-    def run_buy_and_sell_strategy(self):
+    def run_buy_and_sell_strategy_full_automate(self):
         sold_symbols = []
-        # self.get_orders() #Price
         symbols_sell_ratings = get_sell_rating(self)
         if(symbols_sell_ratings != None):
             for symbol in symbols_sell_ratings.items():
                 if(symbol[1]['rank'] >= SELL_RANK):
-                    sold_symbols.append(symbol[0])
                     size = self.holdings[symbol[0]]['Quantity']
+                    sold_symbols.append(symbol[0])
                     self.sell(symbol[0],size) 
                     if(self.wait_for_confirm_sell_order(symbol[0]) != SUCCESS): return
                     self.update_portfolio()
@@ -124,6 +123,45 @@ class Portfolio:
                         print(status['Orders'][0]['Message'])
                     if(self.wait_for_confirm_buy_order(symbol[0], size) != SUCCESS): return
                     self.update_portfolio()
+
+    def run_buy_and_sell_strategy_semi_automate(self):
+        message =  tk.Tk()
+        message.geometry("200x200")
+        sold_symbols = []
+        symbols_sell_ratings = get_sell_rating(self)
+        if(symbols_sell_ratings != None):
+            for symbol in symbols_sell_ratings.items():
+                if(symbol[1]['rank'] >= SELL_RANK):
+                    size = self.holdings[symbol[0]]['Quantity']
+                    answer = messagebox.askyesno('Order Confirmation',f"Selling {size} of {symbol[0]}\nAre You Confirm?")
+                    if answer:
+                        sold_symbols.append(symbol[0])
+                        self.sell(symbol[0],size) 
+                        if(self.wait_for_confirm_sell_order(symbol[0]) != SUCCESS):
+                            message.destroy()
+                            return
+                        self.update_portfolio()
+
+        if(self.cash >= self.trade_size_cash - self.leverage_amount): 
+            symbols_buy_ratings = get_buy_ratings(self)
+            symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
+            for symbol in symbols_buy_ratings.items():
+                if((symbol[1]['rank'] >= BUY_RANK) and (not self.is_holding(symbol[0])) and (self.cash >= self.trade_size_cash - self.leverage_amount) and (symbol[0] not in sold_symbols)):
+                    size = int(self.trade_size_cash / float(symbol[1]['price']))
+                    answer = messagebox.askyesno('Order Confirmation',f"Buying {size} of {symbol[0]}\nAre You Confirm?")
+                    if answer:
+                        status = self.buy(symbol[0], size)
+                        try:
+                            print(f"Error Type: {status['Error']}\nError Message: {status['Message']}\nProgram was stopped")
+                            message.destroy()
+                            return
+                        except:
+                            print(status['Orders'][0]['Message'])
+                        if(self.wait_for_confirm_buy_order(symbol[0], size) != SUCCESS):
+                            message.destroy()
+                            return
+                        self.update_portfolio()
+        message.destroy()
 
     def wait_for_confirm_buy_order(self, symbol, size):
         finish_buy = False
