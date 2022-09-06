@@ -38,7 +38,6 @@ portfolio = None
 # window.close()
 # window = sg.Window('Caller Finder',layout.getWhatsAppLayout(), size=(750,350),element_justification='c')
 
-#TODO HOWCOME IN THE MAIN WINDOW I GOT OTHER SENTIMENT THEN THE SECOND?
 #TODO NEED TO CHECK SELL STARTEGY
 
 def run_market_recommendation():
@@ -343,11 +342,24 @@ def process_user_input():
     window.close()
     sys.exit()
 
+from dotenv import load_dotenv
+import os
 
 if __name__ == '__main__':
 
     process_user_input()
 
+
+
+    # headers = {
+    #     "X-RapidAPI-Host": "seeking-alpha.p.rapidapi.com",
+    #     "X-RapidAPI-Key": os.getenv('sa_api_key')}
+    # url =  "https://seeking-alpha.p.rapidapi.com/analysis/v2/list"
+    # querystring = {"id":"utilities","until":"0","since":"0","size":"40","number":"1"}
+    # news_data = requests.request("GET", url, headers=headers, params=querystring)
+    # news_data = json.loads(news_data.text)
+    # # news_data = news_data['data']
+    # print(news_data)
 
 
     # # growth etf, value etf
