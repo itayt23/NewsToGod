@@ -38,11 +38,8 @@ portfolio = None
 # window.close()
 # window = sg.Window('Caller Finder',layout.getWhatsAppLayout(), size=(750,350),element_justification='c')
 
-#TODO: SHOW HOLDINGS BUTTON
-#TODO: SHOW ORDERS BUTTON
-#TODO: SHOW PORTFOLIO BUTTON
-#TODO: RUN BUY AND SELL ALGO
 #TODO HOWCOME IN THE MAIN WINDOW I GOT OTHER SENTIMENT THEN THE SECOND?
+#TODO NEED TO CHECK SELL STARTEGY
 
 def run_market_recommendation():
     global working, markets, window
@@ -127,6 +124,35 @@ def get_sectors_sentiment():
         window["-PROG-"].UpdateBar(1)
         window.perform_long_operation(run_sectors_sentiment, '-OPERATION DONE-')
     else: sg.popup_quick_message("Running other program right now\nPlease wait until the program finish to run",auto_close_duration=5)
+
+def print_portfolio():
+    global ts_manager, portfolio
+    print('*'*30)
+    print('Portfolio:')
+    print('*'*30)
+    holdings = portfolio.get_holdings()
+    for symbol, details in holdings.items():
+        print(f'####\033[1;34m Symbol: {symbol} \033[0;0m ####')
+        print(f"Position: {details['quantity']} | AVG Price: {details['average_price']} | Unrealized Profit\Loss: {details['trade_yield']}% | Market Value: {details['market_value']}")
+        print('-'*40)
+
+
+def print_orders():
+    global ts_manager, portfolio
+    print('*'*30)
+    print('orders:')
+    print('*'*30)
+    orders = portfolio.get_orders()
+    for order in orders['Orders']:
+        symbol = order['Legs'][0]['Symbol']
+        size = order['Legs'][0]['QuantityOrdered']
+        open_time = order['OpenedDateTime']
+        order_type = order['OrderType']
+        order_status = order['Status']
+        status_description = order['StatusDescription']
+        print(f'####\033[1;34m Symbol: {symbol} \033[0;0m ####')
+        print(f"Quantity: {size} | Open Time: {open_time} | Order Type: {order_type} | Order Status: {order_status} | Status Description: {status_description}")
+        print('-'*40)
 
 def run_strategy(kind):
     global window, working
@@ -309,6 +335,10 @@ def process_user_input():
             run_strategy('Semi')
         if event == 'Update Account':
             update_ts_data()
+        if event == 'Show Portfolio':
+            print_portfolio()
+        if event == 'Show Orders':
+            print_orders()
         event, values = window.read(timeout=100)
     window.close()
     sys.exit()

@@ -17,21 +17,6 @@ SUCCESS = 1
 FAILED_ORDER = -1
 FAIL = 0
 
-# # self.symbols_basket =  ['IYZ','XLY','XHB', 'PEJ','XLP','XLC','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
-#                 'XLK','FDN','XLU','FIW','FAN','XLRE','XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
-# self.etfs_xlc = ['XLC','FIVG','IYZ','VR']
-# self.etfs_xly = ['XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ''AWAY','SOCL','BFIT','KROP']
-# self.etfs_xlp = ['XLP','FTXG','KXI','PBJ']
-# self.etfs_xle = ['XLE','XES','CNRG','FTXN','SOLR','ICLN']
-# self.etfs_xlf = ['XLF','KIE','KCE','KRE']
-# self.etfs_xlv = ['XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC']
-# self.etfs_xli = ['XLI','AIRR','IFRA','IGF','SIMS']
-# self.etfs_xlk = ['XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR']
-# self.etfs_xlu = ['XLU','RNRG','FIW','FAN']
-# self.etfs_xlre = ['XLRE','KBWY','SRVR','VPN','GRNR'] #VPN, GRNR
-# self.etfs_xlb = ['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
-
-
 class Portfolio:
 
     def __init__(self,trade_station,market_sentiment,sectors_sentiment):
@@ -265,7 +250,7 @@ class Portfolio:
         headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
         orders_details = requests.request("GET", url, headers=headers)
         orders_details = json.loads(orders_details.text)
-        print(orders_details)
+        return orders_details
 
     def update_portfolio(self):
         self.cash = self.get_cash()
@@ -563,3 +548,18 @@ def check_seq_price_by_date_weekly(seq,date):
     return (previous_row['Entry Price'])
 
 
+
+
+# # self.symbols_basket =  ['IYZ','XLY','XHB', 'PEJ','XLP','XLC','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
+#                 'XLK','FDN','XLU','FIW','FAN','XLRE','XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
+# self.etfs_xlc = ['XLC','FIVG','IYZ','VR']
+# self.etfs_xly = ['XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ''AWAY','SOCL','BFIT','KROP']
+# self.etfs_xlp = ['XLP','FTXG','KXI','PBJ']
+# self.etfs_xle = ['XLE','XES','CNRG','FTXN','SOLR','ICLN']
+# self.etfs_xlf = ['XLF','KIE','KCE','KRE']
+# self.etfs_xlv = ['XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC']
+# self.etfs_xli = ['XLI','AIRR','IFRA','IGF','SIMS']
+# self.etfs_xlk = ['XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR']
+# self.etfs_xlu = ['XLU','RNRG','FIW','FAN']
+# self.etfs_xlre = ['XLRE','KBWY','SRVR','VPN','GRNR'] #VPN, GRNR
+# self.etfs_xlb = ['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']

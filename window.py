@@ -21,7 +21,8 @@ class Layout:
         [sg.Button("Exit",size=(8,1),font=('12'))]]
 
         account_details_column = [
-        [sg.Button("Run Full Automate Strategy",font=('16'),button_color=('black','goldenrod2')), sg.T("     "), sg.Button("Run Semi Automate Strategy",font=('16'),button_color=('black','goldenrod2'))],
+        [sg.Button("Run Full Automate Strategy",font=('16'),button_color=('black','goldenrod2')), sg.T("   "), sg.Button("Run Semi Automate Strategy",font=('16'),button_color=('black','goldenrod2'))],
+        [sg.T("")],
         [sg.Button("Update Account",font=('12')),sg.Button("Show Portfolio",font=('12')),sg.Button("Show Orders",font=('12'))],
         [sg.Text("Sectors Sentiment: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-SECTORS_SENTIMENT-'),sg.Text("Markets Sentiment: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-MARKETS_SENTIMENT-')],
         [sg.Text("Account ID: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-ACCOUNT_ID-')],
