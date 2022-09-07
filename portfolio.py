@@ -1,4 +1,3 @@
-import PySimpleGUI as sg
 from sequencing import *
 import talib as ta
 import requests
@@ -8,6 +7,11 @@ from functools import reduce
 import time
 import tkinter as tk
 from tkinter import messagebox
+
+# TODO: change buy and sell rank
+# TODO: change connnection lost color and traceback
+
+
 ACCOUNT_ID = 11509188
 BUY_RANK = 5
 SELL_RANK = 5

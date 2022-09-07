@@ -131,7 +131,7 @@ def print_portfolio():
     print('*'*30)
     holdings = portfolio.get_holdings()
     for symbol, details in holdings.items():
-        print(f'####\033[1;34m Symbol: {symbol} \033[0;0m ####')
+        print(f'#### Symbol: {symbol} ####')
         print(f"Position: {details['quantity']} | AVG Price: {details['average_price']} | Unrealized Profit\Loss: {details['trade_yield']}% | Market Value: {details['market_value']}")
         print('-'*40)
 
@@ -139,7 +139,7 @@ def print_portfolio():
 def print_orders():
     global ts_manager, portfolio
     print('*'*30)
-    print('orders:')
+    print('Orders:')
     print('*'*30)
     orders = portfolio.get_orders()
     for order in orders['Orders']:
@@ -149,7 +149,7 @@ def print_orders():
         order_type = order['OrderType']
         order_status = order['Status']
         status_description = order['StatusDescription']
-        print(f'####\033[1;34m Symbol: {symbol} \033[0;0m ####')
+        print(f'#### Symbol: {symbol} ####')
         print(f"Quantity: {size} | Open Time: {open_time} | Order Type: {order_type} | Order Status: {order_status} | Status Description: {status_description}")
         print('-'*40)
 
@@ -296,7 +296,9 @@ def get_account_details():
             window['-REALIZED_RETURN-'].update(account_details['Balances'][0]['BalanceDetail']['RealizedProfitLoss'])
             window['-UNREALIZED_RETURN-'].update(account_details['Balances'][0]['BalanceDetail']['UnrealizedProfitLoss'])
         except Exception:
-            print(f"problem connection TradeStation Api, Details: \n {traceback.format_exc()}\nThread update account stopped")
+            print('!'*70)
+            print("Connection lost while trynig to update account\nUpdating account thread has stopped")
+            print('!'*70)
             updating_account = False
             return
     updating_account = False
@@ -342,8 +344,6 @@ def process_user_input():
     window.close()
     sys.exit()
 
-from dotenv import load_dotenv
-import os
 
 if __name__ == '__main__':
 
