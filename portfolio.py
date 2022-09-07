@@ -1,3 +1,4 @@
+from re import T
 from sequencing import *
 import talib as ta
 import requests
@@ -9,8 +10,8 @@ import tkinter as tk
 from tkinter import messagebox
 
 # TODO: change buy and sell rank
-# TODO: change connnection lost color and traceback
-
+#TODO NEED TO CHECK SELL STARTEGY
+#TODO NEED TO write code for close market!
 
 ACCOUNT_ID = 11509188
 BUY_RANK = 5
@@ -20,6 +21,7 @@ LEVERAGE_SIZE = 0.02
 SUCCESS = 1
 FAILED_ORDER = -1
 FAIL = 0
+ERROR_ORDER = -1
 
 class Portfolio:
 
@@ -62,7 +64,12 @@ class Portfolio:
         response = requests.request("POST", url, json=payload, headers=headers)
         response =  json.loads(response.text)
 
-        return response
+        try:
+            print(f"Error Type: {response['Error']}\nError Message: {response['Message']}\nProgram was stopped")
+            return ERROR_ORDER
+        except:
+            print(response['Orders'][0]['Message'])
+            return SUCCESS
 
     def sell(self,symbol,quantity,order_type='Market'):
         #order_type = "Limit" "StopMarket" "Market" "StopLimit"
@@ -86,49 +93,27 @@ class Portfolio:
 
         return response
 
-    def run_buy_and_sell_strategy_full_automate(self):
-        sold_symbols = []
-        symbols_sell_ratings = get_sell_rating(self)
-        if(symbols_sell_ratings != None):
-            for symbol in symbols_sell_ratings.items():
-                if(symbol[1]['rank'] >= SELL_RANK):
-                    size = self.holdings[symbol[0]]['Quantity']
-                    sold_symbols.append(symbol[0])
-                    self.sell(symbol[0],size) 
-                    if(self.wait_for_confirm_sell_order(symbol[0]) != SUCCESS): return
-                    self.update_portfolio()
-
-        if(self.cash >= self.trade_size_cash - self.leverage_amount): 
-            symbols_buy_ratings = get_buy_ratings(self)
-            symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
-            for symbol in symbols_buy_ratings.items():
-                if((symbol[1]['rank'] >= BUY_RANK) and (not self.is_holding(symbol[0])) and (self.cash >= self.trade_size_cash - self.leverage_amount) and (symbol[0] not in sold_symbols)):
-                    size = int(self.trade_size_cash / float(symbol[1]['price']))
-                    status = self.buy(symbol[0], size)
-                    try:
-                        print(f"Error Type: {status['Error']}\nError Message: {status['Message']}\nProgram was stopped")
-                        return
-                    except:
-                        print(status['Orders'][0]['Message'])
-                    if(self.wait_for_confirm_buy_order(symbol[0], size) != SUCCESS): return
-                    self.update_portfolio()
-
-    def run_buy_and_sell_strategy_semi_automate(self):
+    def run_buy_and_sell_strategy(self,automate):
         message =  tk.Tk()
         message.geometry("200x200")
+        market_open = self.market_open()
+        answer = True
         sold_symbols = []
         symbols_sell_ratings = get_sell_rating(self)
         if(symbols_sell_ratings != None):
             for symbol in symbols_sell_ratings.items():
                 if(symbol[1]['rank'] >= SELL_RANK):
                     size = self.holdings[symbol[0]]['Quantity']
-                    answer = messagebox.askyesno('Order Confirmation',f"Selling {size} of {symbol[0]}\nAre You Confirm?")
+                    if(not automate): answer = messagebox.askyesno('Order Confirmation',f"Selling {size} of {symbol[0]}\nAre You Confirm?")
                     if answer:
                         sold_symbols.append(symbol[0])
-                        self.sell(symbol[0],size) 
-                        if(self.wait_for_confirm_sell_order(symbol[0]) != SUCCESS):
-                            message.destroy()
-                            return
+                        self.sell(symbol[0],size)
+                        if(market_open): 
+                            if(self.wait_for_confirm_sell_order(symbol[0]) != SUCCESS):
+                                message.destroy()
+                                return
+                        else:
+                            pass #TODO: NEED TO WRITE CODE FOR CLOSE MARKET
                         self.update_portfolio()
 
         if(self.cash >= self.trade_size_cash - self.leverage_amount): 
@@ -139,20 +124,19 @@ class Portfolio:
                     size = int(self.trade_size_cash / float(symbol[1]['price']))
                     answer = messagebox.askyesno('Order Confirmation',f"Buying {size} of {symbol[0]}\nAre You Confirm?")
                     if answer:
-                        status = self.buy(symbol[0], size)
-                        try:
-                            print(f"Error Type: {status['Error']}\nError Message: {status['Message']}\nProgram was stopped")
+                        if(self.buy(symbol[0], size) != SUCCESS):
                             message.destroy()
                             return
-                        except:
-                            print(status['Orders'][0]['Message'])
-                        if(self.wait_for_confirm_buy_order(symbol[0], size) != SUCCESS):
-                            message.destroy()
-                            return
+                        if(market_open):
+                            if(self.wait_for_confirm_buy_order(symbol[0], size) != SUCCESS):
+                                message.destroy()
+                                return
+                        else:
+                            pass #TODO: NEED TO WRITE CODE FOR CLOSE MARKET
                         self.update_portfolio()
         message.destroy()
 
-    def wait_for_confirm_buy_order(self, symbol, size):
+    def wait_for_confirm_buy_order(self, symbol, size): #TODO: I can do it also with order info - Filled 
         finish_buy = False
         counter = 0
         while(not finish_buy and counter < 10):
@@ -197,6 +181,20 @@ class Portfolio:
         except Exception:
             print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
             return 0
+        
+        
+    def market_open(self):
+        try:
+            url = "https://api.tradestation.com/v3/marketdata/barcharts/SPY"
+            headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
+            stock_details = requests.request("GET", url, headers=headers)
+            stock_details = json.loads(stock_details.text)
+            if(stock_details['Bars']['IsRealtime'] == True):
+                return True
+            return False
+        except:
+            return False
+        
 
     def get_equity(self):
         try:
@@ -362,8 +360,8 @@ def buy_rate(data_monthly,data_weekly,data_day,etf):
     if(float(last_day.loc[str(last_day.index[-1]),'Close']) > float(data_day.loc[str(last_day.index[-1]),'SMA13']) and check_seq_by_date_daily_equal(seq_daily.get_seq_df(),today) == 1):
         rank += BUY_RANK
 
-    if(check_seq_by_date_daily(seq_daily.get_seq_df(),today) == 1):
-        rank += 1
+    # if(check_seq_by_date_daily(seq_daily.get_seq_df(),today) == 1):
+    #     rank += 1
     if(check_seq_by_date_weekly(seq_weekly.get_seq_df(),today) == 1):
         rank += 1
     else :
@@ -398,7 +396,7 @@ def buy_rate(data_monthly,data_weekly,data_day,etf):
 def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol):
     rank = 0
     today = date.today()
-    sell_ret = {'day':today,'rank':rank,'today': True}
+    sell_ret = {'rank':rank}
     seq_daily = SequenceMethod(data_day,'day',today)
     seq_weekly = SequenceMethod(data_weekly,'weekly',today)
     seq_month = SequenceMethod(data_monthly,'monthly',today)
@@ -410,6 +408,7 @@ def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol):
         daily_price = None
     if(daily_price != None): trade_yield = (daily_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
     else: trade_yield = None
+    last_day = data_daily.tail(1)
     data_weekly = symbol_data_weekly
     data_monthly = symbol_data_month
     data_day['SMA13'] = ta.SMA(data_day['Close'],timeperiod=13)
@@ -426,11 +425,8 @@ def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol):
     last_month = month - timedelta(days=1) 
     last_month = last_month.replace(day = 1)
     last_week = today - timedelta(days=today.weekday(), weeks=1)
-    # pre_week = today - timedelta(days=7*4)
-    # pre_month = today.replace(day =1)
-    # for i in range(3):
-    #     pre_month = pre_month - timedelta(days=1)
-    #     pre_month = pre_month.replace(day = 1)
+    if(float(last_day.loc[str(last_day.index[-1]),'Close']) < float(data_day.loc[str(last_day.index[-1]),'SMA13']) and check_seq_by_date_daily_equal(seq_daily.get_seq_df(),today) == -1):
+        rank += SELL_RANK
     
     if(check_seq_by_date_weekly(seq_weekly.get_seq_df(),today) == -1):
         rank += 1
@@ -441,11 +437,6 @@ def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol):
         rank += 1
     if(check_seq_by_date_monthly(seq_month.get_seq_df(),today) == -1):
         rank += 2
-    # try:
-    #     if(first_weekly_date <= today and data_weekly.loc[str(last_week),'SMA13'] < data_weekly.loc[str(last_week),'SMA5']):
-    #         rank += 1
-    # except:
-    #     rank += 0
     try:
         if(first_monthly_date <= last_month and data_monthly.loc[str(last_month),'SMA13'] < data_monthly.loc[str(last_month),'SMA5']):
             rank += 1
@@ -461,18 +452,6 @@ def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol):
         rank += 1
 
     sell_ret['rank'] = rank
-    sell_ret['day'] = today
-    if(rank >= SELL_RANK):
-        return sell_ret
-
-    for day, row in data_daily.iterrows():
-        if(today == (day - timedelta(days=day.weekday()))):
-            if(row['Close'] < data_day.loc[str(day),'SMA13'] and check_seq_by_date_daily_equal(seq_daily.get_seq_df(),day) == -1): #!NEED TO CHECK IT
-                rank += SELL_RANK
-                sell_ret['rank'] = rank
-                sell_ret['day'] = day
-                sell_ret['today'] = False
-                return sell_ret
     return sell_ret
 
 
@@ -551,6 +530,13 @@ def check_seq_price_by_date_weekly(seq,date):
     if(first): return None
     return (previous_row['Entry Price'])
 
+def print_order(status):
+    try:
+        print(f"Error Type: {status['Error']}\nError Message: {status['Message']}\nProgram was stopped")
+        return ERROR_ORDER
+    except:
+        print(status['Orders'][0]['Message'])
+        return SUCCESS
 
 
 

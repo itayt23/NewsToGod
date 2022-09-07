@@ -38,7 +38,7 @@ portfolio = None
 # window.close()
 # window = sg.Window('Caller Finder',layout.getWhatsAppLayout(), size=(750,350),element_justification='c')
 
-#TODO NEED TO CHECK SELL STARTEGY
+
 
 def run_market_recommendation():
     global working, markets, window
@@ -83,9 +83,9 @@ def run_sectors_sentiment():
 def run_my_strategy(kind):
     global working, portfolio
     if(kind == 'Full'):
-        portfolio.run_buy_and_sell_strategy_full_automate()
+        portfolio.run_buy_and_sell_strategy(automate=True)
     elif(kind == 'Semi'):
-        portfolio.run_buy_and_sell_strategy_semi_automate()
+        portfolio.run_buy_and_sell_strategy(automate=False)
     working = False
     print(f"Strategy was finish successfully! =) ---------> check your portfolio")
 

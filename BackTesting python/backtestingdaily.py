@@ -71,6 +71,7 @@ class Backtest(MyBacktestBase):
 
     def buy_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,week):
         rank = 0
+        enter = False
         buy_ret = {'day':week,'rank':rank,'today': True}
         seq_month, seq_weekly = get_sequence_month_week(symbol,symbol_data_month,symbol_data_weekly,week)
         seq_daily = SequenceMethod(data_day,'day',week + timedelta(days=6))
@@ -103,13 +104,23 @@ class Backtest(MyBacktestBase):
         for i in range(3):
             pre_month = pre_month - timedelta(days=1)
             pre_month = pre_month.replace(day = 1)
-        if(check_seq_by_date_daily(seq_daily.get_seq_df(),week) == 1):
-            rank += 1
+        
+        # if(check_seq_by_date_daily(seq_daily.get_seq_df(),week) == 1):
+        #     rank += 1
         if(check_seq_by_date_weekly(seq_weekly.get_seq_df(),week) == 1):
             rank += 1
         else :
             buy_ret['rank'] = rank
             return buy_ret
+
+        for day, row in data_daily.iterrows():
+            if(week == (day - timedelta(days=day.weekday()))):
+                if(row['Close'] > data_day.loc[str(day),'SMA13'] and check_seq_by_date_daily2(seq_daily.get_seq_df(),day) == 1):
+                    enter = True
+                    rank += BUY_RANK
+                    buy_ret['day'] = day
+                    buy_ret['today'] = False
+                    
         if(check_seq_by_date_monthly(seq_month.get_seq_df(),week) == 1):
             rank += 2
         # try:
@@ -140,18 +151,7 @@ class Backtest(MyBacktestBase):
             rank += 1
 
         buy_ret['rank'] = rank
-        buy_ret['day'] = week
-        if(rank >= BUY_RANK):
-            return buy_ret
-
-        for day, row in data_daily.iterrows():
-            if(week == (day - timedelta(days=day.weekday()))):
-                if(row['Close'] > data_day.loc[str(day),'SMA13'] and check_seq_by_date_daily2(seq_daily.get_seq_df(),day) == 1):
-                    rank += BUY_RANK
-                    buy_ret['rank'] = rank
-                    buy_ret['day'] = day
-                    buy_ret['today'] = False
-                    return buy_ret
+        if(not enter): buy_ret['day'] = week
         return buy_ret
 
     def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,week):
