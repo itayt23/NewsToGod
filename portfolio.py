@@ -1,4 +1,6 @@
+import queue
 from re import T
+from threading import get_ident
 from sequencing import *
 import talib as ta
 import requests
@@ -12,6 +14,7 @@ from tkinter import messagebox
 # TODO: change buy and sell rank
 #TODO NEED TO CHECK SELL STARTEGY
 #TODO NEED TO write code for close market!
+#TODO NEED TO check if market open really working
 
 ACCOUNT_ID = 11509188
 BUY_RANK = 5
@@ -33,8 +36,11 @@ class Portfolio:
         self.holdings = self.get_holdings()
         self.trade_size_cash = TRADE_SIZE * self.net_wealth
         self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
-        self.sell_orders = {}
-        self.buy_orders = {}
+        self.queue_buying_money = 0
+        self.queue_selling_money = 0
+        self.orders = {}
+        self.queue_orders = {}
+        self.filled_orders = {}
         self.market_sentiment = market_sentiment
         self.sectors_sentiment = sectors_sentiment
         self.etfs = {'XLC':['XLC','FIVG','IYZ','VR'],'XLY':['XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ''AWAY','SOCL','BFIT','KROP'],'XLP':['XLP','FTXG','KXI','PBJ'],
@@ -42,6 +48,7 @@ class Portfolio:
                     'XLI':['XLI','AIRR','IFRA','IGF','SIMS'],'XLK':['XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR'],'XLU':['XLU','RNRG','FIW','FAN'],
                     'XLRE':['XLRE','KBWY','SRVR','VPN','GRNR'],'XLB':['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']}
         self.etfs_to_buy = get_best_etfs(self)
+        self.update_orders()
        
     def buy(self,symbol,quantity,order_type='Market'):
         #order_type = "Limit" "StopMarket" "Market" "StopLimit"
@@ -108,19 +115,15 @@ class Portfolio:
                     if answer:
                         sold_symbols.append(symbol[0])
                         self.sell(symbol[0],size)
-                        if(market_open): 
-                            if(self.wait_for_confirm_sell_order(symbol[0]) != SUCCESS):
-                                message.destroy()
-                                return
-                        else:
-                            pass #TODO: NEED TO WRITE CODE FOR CLOSE MARKET
+                        self.update_orders()
                         self.update_portfolio()
+            if(market_open): self.wait_for_confirm_sell_order()
 
-        if(self.cash >= self.trade_size_cash - self.leverage_amount): 
+        if(self.cash - self.queue_buying_money + self.queue_selling_money >= self.trade_size_cash - self.leverage_amount):
             symbols_buy_ratings = get_buy_ratings(self)
             symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
             for symbol in symbols_buy_ratings.items():
-                if((symbol[1]['rank'] >= BUY_RANK) and (not self.is_holding(symbol[0])) and (self.cash >= self.trade_size_cash - self.leverage_amount) and (symbol[0] not in sold_symbols)):
+                if((symbol[1]['rank'] >= BUY_RANK) and (not self.is_holding(symbol[0])) and (self.cash - self.queue_buying_money + self.queue_selling_money >= self.trade_size_cash - self.leverage_amount) and (symbol[0] not in sold_symbols)):
                     size = int(self.trade_size_cash / float(symbol[1]['price']))
                     answer = messagebox.askyesno('Order Confirmation',f"Buying {size} of {symbol[0]}\nAre You Confirm?")
                     if answer:
@@ -131,8 +134,7 @@ class Portfolio:
                             if(self.wait_for_confirm_buy_order(symbol[0], size) != SUCCESS):
                                 message.destroy()
                                 return
-                        else:
-                            pass #TODO: NEED TO WRITE CODE FOR CLOSE MARKET
+                        self.update_orders()
                         self.update_portfolio()
         message.destroy()
 
@@ -152,7 +154,20 @@ class Portfolio:
         print(f'{symbol} Order confirmed')
         return SUCCESS
 
-    def wait_for_confirm_sell_order(self, symbol):
+    def wait_for_confirm_sell_order(self):
+        finish_sell_orders = False
+        found = False
+        while(not finish_sell_orders):
+            self.update_orders()
+            for order in self.queue_orders.items():
+                if(order[1]['Buy or Sell'] == 'Sell'):
+                    found = True
+                    break
+            if(not found): finish_sell_orders = True
+        self.update_orders()
+        self.update_portfolio()
+
+    def wait_for_confirm_sell_order_old(self, symbol):
         finish_sell = False
         counter = 0
         while(not finish_sell and counter < 10):
@@ -184,17 +199,8 @@ class Portfolio:
         
         
     def market_open(self):
-        try:
-            url = "https://api.tradestation.com/v3/marketdata/barcharts/SPY"
-            headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
-            stock_details = requests.request("GET", url, headers=headers)
-            stock_details = json.loads(stock_details.text)
-            if(stock_details['Bars']['IsRealtime'] == True):
-                return True
-            return False
-        except:
-            return False
-        
+        return True
+    
 
     def get_equity(self):
         try:
@@ -263,11 +269,45 @@ class Portfolio:
         self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
 
     def update_orders(self):
-        pass
+        queue_buy_money = 0
+        queue_sell_money = 0
+        orders = self.get_orders()
+        for order in orders['Orders']:
+            symbol = order['Legs'][0]['Symbol']
+            size = order['Legs'][0]['QuantityOrdered']
+            open_time = order['OpenedDateTime']
+            buy_or_sell =order['Legs'][0]['BuyOrSell']
+            order_type = order['OrderType']
+            order_status = order['Status']
+            status_description = order['StatusDescription']
+            order_price = order['PriceUsedForBuyingPower']
+            if(status_description == 'Queued' or status_description == 'Received' or status_description == 'Sent'):
+                self.queue_orders[symbol] = {'Quantity': size, 'Price': order_price ,'Open Time': open_time, 'Order Type': order_type,
+                        'Buy or Sell': buy_or_sell,'Order Status': order_status, 'Status Description': status_description}
+                self.orders[symbol] = {'Quantity': size, 'Price': order_price ,'Open Time': open_time, 'Order Type': order_type,
+                        'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
+
+                if(buy_or_sell == 'Buy'):
+                    queue_buy_money = queue_buy_money + (int(size) * float(order_price))  
+
+                if(buy_or_sell == 'Sell'):
+                    queue_sell_money = queue_sell_money + (int(size) * float(order_price))  
+            elif(status_description == 'Filled'):
+                self.queue_orders[symbol] = {'Quantity': size, 'Filled Price': order['FilledPrice'] ,'Open Time': open_time, 'Order Type': order_type,
+                        'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
+                self.orders[symbol] = {'Quantity': size, 'Filled Price': order['FilledPrice'] ,'Open Time': open_time, 'Order Type': order_type,
+                        'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
+            else:
+                self.orders[symbol] = {'Quantity': size, 'Price': order_price ,'Open Time': open_time, 'Order Type': order_type,
+                         'Order Status': order_status, 'Status Description': status_description}
+            self.queue_buying_money = queue_buy_money
+            self.queue_selling_money = queue_sell_money
 
     def is_holding(self,symbol):
         for ticker in self.holdings.items():
             if(ticker[0] == symbol): return True
+        for order in self.queue_orders.items():
+            if(order[0] == symbol): return True
         return False
 
 def get_best_etfs(self):
@@ -302,11 +342,12 @@ def get_best_etfs(self):
 
 def get_buy_ratings(self):
     rating = {}
+    market_rank = self.market_sentiment.get_sentiment_score()
     for etf in self.etfs_to_buy:
         symbol_data_day = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1d',progress=False)).dropna()
         symbol_data_month = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1mo',progress=False)).dropna()
         symbol_data_weekly = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1wk',progress=False)).dropna()
-        rating[etf] = buy_rate(symbol_data_month,symbol_data_weekly,symbol_data_day,etf)
+        rating[etf] = buy_rate(symbol_data_month,symbol_data_weekly,symbol_data_day,etf,market_rank)
     return rating
 
 def get_sell_rating(self):
@@ -321,8 +362,9 @@ def get_sell_rating(self):
     return rating
 
 
-def buy_rate(data_monthly,data_weekly,data_day,etf):
+def buy_rate(data_monthly,data_weekly,data_day,etf,market_rank):
     rank = 0
+    rank += market_rank
     today = date.today()
     buy_ret = {'rank':rank,'price': 0}
     seq_daily = SequenceMethod(data_day,'day',today)
@@ -360,8 +402,6 @@ def buy_rate(data_monthly,data_weekly,data_day,etf):
     if(float(last_day.loc[str(last_day.index[-1]),'Close']) > float(data_day.loc[str(last_day.index[-1]),'SMA13']) and check_seq_by_date_daily_equal(seq_daily.get_seq_df(),today) == 1):
         rank += BUY_RANK
 
-    # if(check_seq_by_date_daily(seq_daily.get_seq_df(),today) == 1):
-    #     rank += 1
     if(check_seq_by_date_weekly(seq_weekly.get_seq_df(),today) == 1):
         rank += 1
     else :
@@ -537,7 +577,6 @@ def print_order(status):
     except:
         print(status['Orders'][0]['Message'])
         return SUCCESS
-
 
 
 # # self.symbols_basket =  ['IYZ','XLY','XHB', 'PEJ','XLP','XLC','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
