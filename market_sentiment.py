@@ -1,8 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-from timeit import timeit
-from tracemalloc import start
-from typing import Counter
-from numpy import sinc
 import requests
 import json
 from dotenv import load_dotenv

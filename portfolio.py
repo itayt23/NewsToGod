@@ -1,6 +1,4 @@
-import queue
-from re import T
-from threading import get_ident
+import yahoo_fin.stock_info as yf2
 from sequencing import *
 import talib as ta
 import requests
@@ -10,6 +8,7 @@ from functools import reduce
 import time
 import tkinter as tk
 from tkinter import messagebox
+import marketopen
 
 # TODO: change buy and sell rank
 #TODO NEED TO CHECK SELL STARTEGY
@@ -44,8 +43,8 @@ class Portfolio:
         self.market_sentiment = market_sentiment
         self.sectors_sentiment = sectors_sentiment
         self.etfs = {'XLC':['XLC','FIVG','IYZ','VR'],'XLY':['XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ''AWAY','SOCL','BFIT','KROP'],'XLP':['XLP','FTXG','KXI','PBJ'],
-                    'XLE':['XLE','XES','CNRG','FTXN','SOLR','ICLN'],'XLF':['XLF','KIE','KCE','KRE'],'XLV':['XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC'],
-                    'XLI':['XLI','AIRR','IFRA','IGF','SIMS'],'XLK':['XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR'],'XLU':['XLU','RNRG','FIW','FAN'],
+                    'XLE':['XLE','FTXN','ICLN'],'XLF':['XLF','KIE','KCE','KRE'],'XLV':['XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC'],
+                    'XLI':['XLI','AIRR','IFRA','IGF','SIMS'],'XLK':['XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR'],'XLU':['XLU','FIW','FAN'],
                     'XLRE':['XLRE','KBWY','SRVR','VPN','GRNR'],'XLB':['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']}
         self.etfs_to_buy = get_best_etfs(self)
         self.update_orders()
@@ -102,7 +101,8 @@ class Portfolio:
 
     def run_buy_and_sell_strategy(self,automate):
         message =  tk.Tk()
-        message.geometry("200x200")
+        message.geometry("250x250")
+        # message.focus_force() #TODO: try it to see if its make focus!
         market_open = self.market_open()
         answer = True
         sold_symbols = []
@@ -199,7 +199,11 @@ class Portfolio:
         
         
     def market_open(self):
-        return True
+        market_status = yf2.get_market_status() 
+        if(market_status ==  'OPEN' or market_status == 'REGULAR'):
+            return True
+        return False
+        
     
 
     def get_equity(self):
@@ -424,7 +428,7 @@ def buy_rate(data_monthly,data_weekly,data_day,etf,market_rank):
         rank += 1
     if(is_moving_away_monthly(data_monthly,last_month,pre_month)):
         rank += 1
-    if(move_return != None and move_return <= avg_weekly_move/2.5): #was 2.5
+    if(move_return != None and move_return <= avg_weekly_move/2): #was 2.5
         rank += 1
 
     buy_ret['rank'] = rank
