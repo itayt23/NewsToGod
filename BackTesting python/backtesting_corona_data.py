@@ -953,4 +953,25 @@ def concat_stocks(stocks_news_dict):
     return stocks
 
 
-BackTestingCorona()
+def articles_2021():
+    articles_sentiment = pd.DataFrame(columns=['Date','Articles Analayzed','Sum Score','Avg'])
+    new_row = {}
+    path_articels = Path.cwd() / 'Results' / 'BackTesting' / 'Articles 2021' 
+    articles_files = glob.glob(str(path_articels) + "\*.csv")
+    for article in range(len(articles_files)):
+        article_df = pd.read_csv(articles_files[article])
+        article_sum_score = article_df['Sentiment'].sum()
+        article_size = article_df.shape[0]
+        article_date = article_df.loc[0,'Date'][:10]
+        new_row['Date'] = article_date
+        new_row['Articles Analayzed'] = article_size
+        new_row['Sum Score'] = article_sum_score
+        new_row['Avg'] = article_sum_score/article_size
+        # new_row['Sentiment'] = score_to_sentiment(article_sum_score/article_size)
+        articles_sentiment = articles_sentiment.append(new_row, ignore_index=True)
+    articles_sentiment.to_csv(path_articels / f"articles_sentiment_2021_TOTAL.csv")
+
+# BackTestingCorona()
+
+articles_2021()
+

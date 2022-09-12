@@ -8,12 +8,11 @@ from functools import reduce
 import time
 import tkinter as tk
 from tkinter import messagebox
-import marketopen
 
 # TODO: change buy and sell rank
 #TODO NEED TO CHECK SELL STARTEGY
+#TODO NEED TO write check_seq_by_date_weekly for previous week
 #TODO NEED TO write code for close market!
-#TODO NEED TO check if market open really working
 
 ACCOUNT_ID = 11509188
 BUY_RANK = 5
@@ -356,13 +355,14 @@ def get_buy_ratings(self):
 
 def get_sell_rating(self):
     rating = {}
+    market_rank = self.market_sentiment.get_sentiment_score()
     if(not self.holdings):
         return None
     for symbol in self.holdings.items():
         symbol_data_day = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1d',progress=False)).dropna()
         symbol_data_month = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1mo',progress=False)).dropna()
         symbol_data_weekly = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1wk',progress=False)).dropna()
-        rating[symbol[0]] = sell_rate(symbol_data_month,symbol_data_weekly,symbol_data_day,symbol[0])
+        rating[symbol[0]] = sell_rate(symbol_data_month,symbol_data_weekly,symbol_data_day,symbol[0],market_rank)
     return rating
 
 
@@ -437,8 +437,9 @@ def buy_rate(data_monthly,data_weekly,data_day,etf,market_rank):
 
 
 
-def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol):
+def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,market_rank):
     rank = 0
+    rank = rank + (market_rank*(-1))
     today = date.today()
     sell_ret = {'rank':rank}
     seq_daily = SequenceMethod(data_day,'day',today)
@@ -474,11 +475,8 @@ def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol):
     
     if(check_seq_by_date_weekly(seq_weekly.get_seq_df(),today) == -1):
         rank += 1
-        self.holdings[symbol]['Red Weeks'] = self.holdings[symbol]['Red Weeks'] + 1
-    else :
-        self.holdings[symbol]['Red Weeks'] = 0    
-    if(self.holdings[symbol]['Red Weeks'] >= 2): # WAs 2
-        rank += 1
+        if(check_seq_by_date_weekly_previous(seq_weekly.get_seq_df(),today) == -1):
+            rank += 1
     if(check_seq_by_date_monthly(seq_month.get_seq_df(),today) == -1):
         rank += 2
     try:
@@ -494,6 +492,7 @@ def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol):
         rank += 1
     if(trade_yield != None and trade_yield >= avg_weekly_move*1.5): #was 3
         rank += 1
+    
 
     sell_ret['rank'] = rank
     return sell_ret
@@ -530,6 +529,7 @@ def check_seq_by_date_monthly(seq,date):
     return int(previous_row['Sequence'])
 
 def check_seq_by_date_weekly(seq,date):
+    # return seq.iloc[-1]['Sequence'] #TODO: Should work instead of for loop
     previous_row = 0
     first = True
     for index,row in seq.iterrows():
@@ -539,6 +539,9 @@ def check_seq_by_date_weekly(seq,date):
         else: break
     if(first): return 0
     return int(previous_row['Sequence'])
+
+def check_seq_by_date_weekly_previous(seq,date):
+   return int(seq.iloc[-2]['Sequence'])
 
 def check_seq_by_date_daily(seq,date):
     previous_row = 0
