@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 # TODO: change buy and sell rank
-#TODO NEED TO CHECK SELL STARTEGY
+#TODO add sectors articles reading!
 #TODO NEED TO write check_seq_by_date_weekly for previous week
 #TODO NEED TO write code for close market!
 
@@ -239,8 +239,6 @@ class Portfolio:
             account_details = requests.request("GET", url, headers=headers)
             account_details = json.loads(account_details.text)
             for position in account_details['Positions']:
-                if(position['AccountID'] != ACCOUNT_ID):
-                    continue
                 position_id = position["PositionID"]
                 quantity = position["Quantity"]
                 long_short = position["LongShort"]
@@ -362,7 +360,7 @@ def get_sell_rating(self):
         symbol_data_day = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1d',progress=False)).dropna()
         symbol_data_month = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1mo',progress=False)).dropna()
         symbol_data_weekly = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1wk',progress=False)).dropna()
-        rating[symbol[0]] = sell_rate(symbol_data_month,symbol_data_weekly,symbol_data_day,symbol[0],market_rank)
+        rating[symbol[0]] = sell_rate(self,symbol_data_month,symbol_data_weekly,symbol_data_day,symbol[0],market_rank)
     return rating
 
 
@@ -436,8 +434,7 @@ def buy_rate(data_monthly,data_weekly,data_day,etf,market_rank):
     return buy_ret
 
 
-
-def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,market_rank):
+def sell_rate(self,data_monthly,data_weekly,data_day,symbol,market_rank):
     rank = 0
     rank = rank + (market_rank*(-1))
     today = date.today()
@@ -451,11 +448,8 @@ def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,market_r
         daily_price = data_daily['Close'][-1]
     except:
         daily_price = None
-    if(daily_price != None): trade_yield = (daily_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
-    else: trade_yield = None
+    trade_yield = float(self.holdings[symbol]['UnrealizedProfitLossPercent'])
     last_day = data_daily.tail(1)
-    data_weekly = symbol_data_weekly
-    data_monthly = symbol_data_month
     data_day['SMA13'] = ta.SMA(data_day['Close'],timeperiod=13)
     data_day['SMA5'] = ta.SMA(data_day['SMA13'], timeperiod=5)
     data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
@@ -484,13 +478,13 @@ def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,market_r
             rank += 1
     except:
         rank += 0
-    if(trade_yield != None and trade_yield >= avg_weekly_move*0.75): #Was 0.75
+    if(trade_yield >= avg_weekly_move*0.75): #Was 0.75
         rank += 1
-    if(trade_yield != None and trade_yield >= avg_weekly_move):
+    if(trade_yield >= avg_weekly_move):
         rank += 1
-    if(trade_yield != None and trade_yield >= avg_weekly_move*1.25): #was 2
+    if(trade_yield >= avg_weekly_move*1.25): #was 2
         rank += 1
-    if(trade_yield != None and trade_yield >= avg_weekly_move*1.5): #was 3
+    if(trade_yield >= avg_weekly_move*1.5): #was 3
         rank += 1
     
 
