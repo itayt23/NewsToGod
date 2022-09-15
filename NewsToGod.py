@@ -132,9 +132,8 @@ def print_portfolio():
     holdings = portfolio.get_holdings()
     for symbol, details in holdings.items():
         print(f'#### Symbol: {symbol} ####')
-        print(f"Position: {details['quantity']} | AVG Price: {details['average_price']} | Unrealized Profit\Loss: {details['trade_yield']}% | Market Value: {details['market_value']}")
+        print(f"Position: {details['Quantity']} | AVG Price: {details['AveragePrice']} | Unrealized Profit\Loss: {details['UnrealizedProfitLossPercent']}% | Market Value: {details['MarketValue']}")
         print('-'*40)
-
 
 def print_orders():
     global ts_manager, portfolio
@@ -298,7 +297,7 @@ def get_account_details():
             window['-UNREALIZED_RETURN-'].update(round(float(account_details['Balances'][0]['BalanceDetail']['UnrealizedProfitLoss'])/portfolio.get_start_amount()*100,2))
         except Exception:
             print('!'*70)
-            print("Connection lost while trynig to update account\nUpdating account thread has stopped")
+            print("Connection lost while tried to update account\nUpdating account thread has stopped")
             print('!'*70)
             updating_account = False
             return
