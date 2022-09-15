@@ -275,7 +275,8 @@ def update_ts_data():
     else: sg.popup_quick_message("Already Updating Account Details",auto_close_duration=4)
 
 def get_account_details():
-    global sectors,markets,window,ts_manager,updating_account
+    global sectors,markets,window,ts_manager,updating_account,portfolio
+    
     try:
         window['-SECTORS_SENTIMENT-'].update(sectors.get_sentiment())
         window['-MARKETS_SENTIMENT-'].update(markets.get_sentiment())
@@ -293,8 +294,8 @@ def get_account_details():
             window['-ACCOUNT_CASH-'].update(account_details['Balances'][0]['CashBalance'])
             window['-ACCOUNT_EQUITY-'].update(account_details['Balances'][0]['MarketValue'])
             window['-TODAY_RETURN-'].update(account_details['Balances'][0]['TodaysProfitLoss'])
-            window['-REALIZED_RETURN-'].update(account_details['Balances'][0]['BalanceDetail']['RealizedProfitLoss'])
-            window['-UNREALIZED_RETURN-'].update(account_details['Balances'][0]['BalanceDetail']['UnrealizedProfitLoss'])
+            window['-REALIZED_RETURN-'].update(round((float(account_details['Balances'][0]['Equity'])-portfolio.get_start_amount())/portfolio.get_start_amount()*100,2))
+            window['-UNREALIZED_RETURN-'].update(round(float(account_details['Balances'][0]['BalanceDetail']['UnrealizedProfitLoss'])/portfolio.get_start_amount()*100,2))
         except Exception:
             print('!'*70)
             print("Connection lost while trynig to update account\nUpdating account thread has stopped")

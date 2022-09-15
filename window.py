@@ -32,11 +32,11 @@ class Layout:
 
         orders_column = [
         [sg.Text("Today Return: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-TODAY_RETURN-')],
-        [sg.Text("Realized Return: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-REALIZED_RETURN-')],
-        [sg.Text("Unrealized Return: ",font=('14')),sg.Text(text_color='white',font=('14'),key='-UNREALIZED_RETURN-')]]
+        [sg.Text("Realized Return(%): ",font=('14')),sg.Text(text_color='white',font=('14'),key='-REALIZED_RETURN-')],
+        [sg.Text("Unrealized Return(%): ",font=('14')),sg.Text(text_color='white',font=('14'),key='-UNREALIZED_RETURN-')]]
 
         self.tradestation_layout = [
-        [sg.Column(account_details_column,justification='left'),sg.VSeparator(pad=(200,0)),sg.Column(orders_column)],
+        [sg.Column(account_details_column,justification='left'),sg.VSeparator(pad=(100,0)),sg.Column(orders_column)],
         [sg.T("")],
         [sg.Output(key='-OUT1-', size=(150, 20))],
         [sg.Button("Exit",size=(8,1),font=('12'))]]             

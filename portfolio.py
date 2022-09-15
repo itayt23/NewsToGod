@@ -15,6 +15,7 @@ from tkinter import messagebox
 #TODO: xle and xlu fixed
 
 ACCOUNT_ID = 11509188
+STARTING_AMOUNT = 1000000
 BUY_RANK = 5
 SELL_RANK = 5
 TRADE_SIZE = 0.25
@@ -29,6 +30,7 @@ class Portfolio:
     def __init__(self,trade_station,market_sentiment,sectors_sentiment):
         self.trade_station = trade_station
         self.cash = self.get_cash()
+        self.starting_amount = STARTING_AMOUNT
         self.equity = self.get_equity()
         self.net_wealth = self.cash + self.equity
         self.holdings = self.get_holdings()
@@ -47,7 +49,10 @@ class Portfolio:
                     'XLRE':['XLRE','KBWY','SRVR','VPN','GRNR'],'XLB':['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']}
         self.etfs_to_buy = get_best_etfs(self)
         self.update_orders()
-       
+    
+    def get_start_amount(self):
+        return self.starting_amount
+        
     def buy(self,symbol,quantity,order_type='Market'):
         #order_type = "Limit" "StopMarket" "Market" "StopLimit"
         #"TimeInForce": {"Duration": "DAY"\ 'GTC'

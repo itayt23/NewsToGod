@@ -90,6 +90,8 @@ class SectorsSentiment:
         for sector in sectors:
             news_score[sector] = 0
             news_properties[sector] = 1
+            articles_score[sector] = 0
+            articles_properties[sector] = 1
             sector_1d, sector_1wk, sector_1mo = download_symbol_data(sector)
             sector_1d, sector_1wk, sector_1mo = clean_df_nans(sector_1d, sector_1wk, sector_1mo)
             add_technical_data(sector_1d, sector_1wk, sector_1mo)
@@ -907,13 +909,13 @@ def articles_sentiment(start_date, stop_date,sector):
     # stop_date = finish_date - timedelta(days=3)
     category = get_articles_category(sector)
     since_timestamp = int(start_date.timestamp())
-    until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
+    # until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
     articles = []
     stop = False
     url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
     for page in range(0,7):
         if(stop): break
-        querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":category}
+        querystring = {"until":since_timestamp,"since":"0","size":"40","number":page,"category":category}
         try:
             articels_list = requests.request("GET", url, headers=headers, params=querystring)
             articels_list = json.loads(articels_list.text)
