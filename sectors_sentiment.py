@@ -1,9 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-from timeit import timeit
-from tracemalloc import start
-from typing import Counter
-from numpy import sinc
-from pyrsistent import s
 import requests
 import json
 from dotenv import load_dotenv
@@ -51,8 +46,8 @@ global cut, articles_score, articles_properties, news_score, news_properties, za
 zacks_score = 0 
 zacks_properties = 1
 cut = 0
-articles_properties = 1 # TODO: need to change it after dealing with articles
-articles_score = 0
+articles_properties = {}
+articles_score = {}
 news_score = {}
 news_properties = {} #TODO: was 1 
 total_scores = 0
@@ -76,7 +71,7 @@ class SectorsSentiment:
             results_path.mkdir(parents=True)
         self.sector_df = pd.DataFrame(index=['XLB','XLC','XLY','XLP','XLE','XLF','XLV','XLI','XLK','XLU','XLRE'],
             columns=['News Sentiment','Article Sentiment','Zacks Rank','Technical Score daily','Technical Score weekly',
-                'Technical Score monthly','Final Score','Date'])
+                'Technical Score monthly','Final Score','Final Score Sentiment','Date'])
         self.technical_df = pd.DataFrame(index=['daily','weekly','monthly'],columns=['SMA10','EMA10','SMA20','EMA20','SMA30','EMA30',
             'SMA50','EMA50','SMA100','EMA100','SMA200','EMA200','RSI','STOCH','CCI','ADX','AWS','MOM','MACD','STOCHRSI','WILLIAM','ULTIMATE'])
         sectors = ['XLB','XLC','XLY','XLP','XLE','XLF','XLV','XLI','XLK','XLU','XLRE']
@@ -203,7 +198,7 @@ def run(self,sector_1d, sector_1wk, sector_1mo,sector,start_run_time):
         start_week = today - timedelta(days=today.weekday())
         start_date = sector_1d.loc[sector_1d.index[-1]]["Date"].date()
         stop_date = sector_1wk.loc[sector_1wk.index[-1]]["Date"].date() - timedelta(days=3)
-        current_date = sector_1wk.loc[sector_1wk.index[-1]]["Date"].date() # !i think i dont need this
+        current_date = sector_1wk.loc[sector_1wk.index[-1]]["Date"].date() # articles_score!i think i dont need this
         month = sector_1mo.loc[sector_1mo.index[-1]]["Date"].date().month
         end_date = datetime.strptime("2021-01-01", "%Y-%m-%d").date()
     except Exception as e:
@@ -221,18 +216,19 @@ def run(self,sector_1d, sector_1wk, sector_1mo,sector,start_run_time):
         month = sector_1mo.loc[sector_1mo.index[-1]]["Date"].date().month
     zacks_score = run_zacks_rank(sector)
     run_sectors_news_processor(start_date_news, stop_date, sector,start_run_time)
+    run_articles_news_processor(start_date_news, stop_date,sector,start_run_time)
     
     # run_sectors_news_processor(start_date_news, stop_date,sector)
-    # run_articles_news_processor(start_date_news, stop_date)
-    total_scores = daily_scores + weekly_scores + monthly_scores + articles_score + news_score[sector] + zacks_score
-    total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties + news_properties[sector] + zacks_properties
+    total_scores = daily_scores + weekly_scores + monthly_scores + articles_score[sector] + news_score[sector] + zacks_score
+    total_properties = daily_properties + weekly_properties + monthly_properties + articles_properties[sector] + news_properties[sector] + zacks_properties
     self.sector_df.loc[sector, 'News Sentiment'] = score_to_sentiment(news_score[sector]/news_properties[sector])
-    self.sector_df.loc[sector, 'Article Sentiment'] = score_to_sentiment(articles_score/articles_properties)
+    self.sector_df.loc[sector, 'Article Sentiment'] = score_to_sentiment(articles_score[sector]/articles_properties[sector])
     self.sector_df.loc[sector, 'Zacks Rank'] = zacks_to_sentiment(zacks_score)
     self.sector_df.loc[sector, 'Technical Score daily'] = score_to_sentiment(daily_scores/daily_properties)
     self.sector_df.loc[sector, 'Technical Score weekly'] = score_to_sentiment(weekly_scores/weekly_properties)
     self.sector_df.loc[sector, 'Technical Score monthly'] = score_to_sentiment(monthly_scores/monthly_properties)
-    self.sector_df.loc[sector, 'Final Score'] = score_to_sentiment(total_scores/total_properties)
+    self.sector_df.loc[sector, 'Final Score Sentiment'] = score_to_sentiment(total_scores/total_properties)
+    self.sector_df.loc[sector, 'Final Score'] = (total_scores/total_properties)
     self.sector_df.loc[sector, 'Date'] = current_date
     update_sentiment(self, sector)
     sector_1d.drop(sector_1d.tail(cut).index,inplace = True)
@@ -246,8 +242,6 @@ def run(self,sector_1d, sector_1wk, sector_1mo,sector,start_run_time):
     daily_properties = 0
     weekly_scores = 0
     weekly_properties = 0
-    articles_score = 0
-    articles_properties = 1
     zacks_score = 0
     cut = 0
     # self.sector_df.to_csv(results_path / f"final_sentiment_spy.csv")
@@ -840,12 +834,12 @@ def oscillators_extract_data(sector_1d, sector_1wk, sector_1mo):
         print(f"Problem was accured during extract OSCILLATORS data, Details: \n {traceback.format_exc()}")
 
 
-def articles_week_analyzer(articles, date,start_run_time):
+def articles_week_analyzer(articles, date,start_run_time,sector):
     global articles_score
     counter = 1
     sum = 0
     market_articles_sentiment_df = pd.DataFrame(columns=['HeadLine', 'Sentiment', 'Date', "URL"])
-    results_path = Path.cwd() / 'Results' / 'csv_files' / 'Market Articles'
+    results_path = Path.cwd() / 'Results' / 'csv_files' / 'Sectors Articles' / sector
     if not results_path.exists():
         results_path.mkdir(parents=True)
     new_row ={}
@@ -867,7 +861,7 @@ def articles_week_analyzer(articles, date,start_run_time):
             if((article_summary_score + article_content_score) > 0) : final_score = 1
             elif((article_summary_score + article_content_score) < 0) : final_score = -1
             else: final_score = 0
-            articles_score += final_score
+            articles_score[sector] += final_score
             new_row['HeadLine'] = article_title
             new_row['Sentiment'] = final_score
             new_row['Date'] = article_date
@@ -880,7 +874,7 @@ def articles_week_analyzer(articles, date,start_run_time):
         new_row.clear()
         counter += 1
         sum = 0
-    market_articles_sentiment_df.to_csv(results_path / f"articles_sentiment_week_{date}.csv")
+    market_articles_sentiment_df.to_csv(results_path / f"{sector}_articles_sentiment_week_{date}.csv")
 
 def get_all_articles(id):
     url = "https://seeking-alpha.p.rapidapi.com/articles/get-details"
@@ -892,25 +886,26 @@ def get_all_articles(id):
         print(f'Problem at one of the articles ENCODING PROBLEM: {e}')
     return article
 
-def run_articles_news_processor(start_date, stop_date,start_run_time):
+def run_articles_news_processor(start_date, stop_date,sector,start_run_time):
     articles = {}
-    articles_id = articles_sentiment(start_date, stop_date)
+    articles_id = articles_sentiment(start_date, stop_date,category)
     count = 0
-    with ThreadPoolExecutor(max_workers=6) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         all_articles = executor.map(get_all_articles, articles_id)
         executor.shutdown(wait=True)
     for article in all_articles:
         articles[count] = article
         count += 1
-    articles_week_analyzer(articles,start_date,start_run_time)
+    articles_week_analyzer(articles,start_date,start_run_time,sector)
 
 
-def articles_sentiment(start_date, stop_date):
+def articles_sentiment(start_date, stop_date,sector):
     global articles_properties
     start_date += timedelta(days=1)
     start_date = datetime.strptime(f'{start_date} 06:59:59', '%Y-%m-%d %H:%M:%S')
     # start_date -= timedelta(days=2)
     # stop_date = finish_date - timedelta(days=3)
+    category = get_articles_category(sector)
     since_timestamp = int(start_date.timestamp())
     until_timestamp = time.mktime(time.strptime('2022-10-12 06:59:59', '%Y-%m-%d %H:%M:%S')) + 0.999
     articles = []
@@ -918,7 +913,7 @@ def articles_sentiment(start_date, stop_date):
     url = "https://seeking-alpha.p.rapidapi.com/articles/v2/list"
     for page in range(0,7):
         if(stop): break
-        querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":"market-outlook"}
+        querystring = {"until":since_timestamp,"since":until_timestamp,"size":"40","number":page,"category":category}
         try:
             articels_list = requests.request("GET", url, headers=headers, params=querystring)
             articels_list = json.loads(articels_list.text)
@@ -931,7 +926,7 @@ def articles_sentiment(start_date, stop_date):
                 if(stop_date >= date_t.date()) : stop = True
                 elif(stop == False):
                     articles.append(article['id'])
-                    articles_properties += 1
+                    articles_properties[sector] += 1
         except Exception as e:
             print(f'EXCEPTION was accured during network connection trying get articles, DETAILS: {e}')
     return articles
@@ -1030,6 +1025,32 @@ def sector_to_category(sector):
         return "market-news::reits"
     elif(sector == "XLB"):
         return "market-news::commodities"
+    else:
+        return "None"
+
+def get_articles_category(sector):
+    if(sector == 'XLK'):
+        return "stock-ideas::technology"
+    elif(sector == "XLV"):
+        return "stock-ideas::healthcare"
+    elif(sector == "XLF"):
+        return "stock-ideas::financial"
+    elif(sector == "XLE"):
+        return "sectors::energy"
+    elif(sector == "XLI"):
+        return "stock-ideas::industrial-goods"
+    elif(sector == "XLU"):
+        return "stock-ideas::utilities"
+    elif(sector == "XLP"):
+        return "sectors::consumer-staples"
+    elif(sector == "XLC"):
+        return "sectors::communication-services"
+    elif(sector == "XLY"):
+        return "stock-ideas::consumer-goods" #! NEED TO CHECK IF ITS FIT!
+    elif(sector == "XLRE"):
+        return "sectors::real-estate"
+    elif(sector == "XLB"):
+        return "stock-ideas::basic-materials"
     else:
         return "None"
 
@@ -1140,6 +1161,7 @@ def get_news_dict2(sector):
             print(f'EXCEPTION was accured during network connection trying get News, DETAILS: {e}')
     return news
     
+
 
 
 # sector_1dd, sector_1wkk, sector_1moo = download_symbol_data("XLK")

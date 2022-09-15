@@ -12,7 +12,7 @@ from tkinter import messagebox
 # TODO: change buy and sell rank
 #TODO add sectors articles reading!
 #TODO NEED TO write check_seq_by_date_weekly for previous week
-#TODO NEED TO write code for close market!
+#TODO: xle and xlu fixed
 
 ACCOUNT_ID = 11509188
 BUY_RANK = 5
@@ -80,10 +80,10 @@ class Portfolio:
         #order_type = "Limit" "StopMarket" "Market" "StopLimit"
         url = "https://api.tradestation.com/v3/orderexecution/orders"
         payload = {
-            "AccountID": ACCOUNT_ID,
-            "Symbol": symbol,
-            "Quantity": quantity,
-            "OrderType": order_type,
+            "AccountID": f"{ACCOUNT_ID}",
+            "Symbol": f"{symbol}",
+            "Quantity": f"{quantity}",
+            "OrderType": f"{order_type}",
             "TradeAction": "SELL",
             "TimeInForce": {"Duration": "GTC"}, #!need to check how to put just daily order
             "Route": "Intelligent"
@@ -96,12 +96,17 @@ class Portfolio:
         response = requests.request("POST", url, json=payload, headers=headers)
         response =  json.loads(response.text)
 
-        return response
+        try:
+            print(f"Error Type: {response['Error']}\nError Message: {response['Message']}\nProgram was stopped")
+            return ERROR_ORDER
+        except:
+            print(response['Orders'][0]['Message'])
+            return SUCCESS
 
     def run_buy_and_sell_strategy(self,automate):
         message =  tk.Tk()
         message.geometry("250x250")
-        # message.focus_force() #TODO: try it to see if its make focus!
+        message.focus_force() #TODO: try it to see if its make focus!
         market_open = self.market_open()
         answer = True
         sold_symbols = []
@@ -113,11 +118,13 @@ class Portfolio:
                     if(not automate): answer = messagebox.askyesno('Order Confirmation',f"Selling {size} of {symbol[0]}\nAre You Confirm?")
                     if answer:
                         sold_symbols.append(symbol[0])
-                        self.sell(symbol[0],size)
+                        if(self.sell(symbol[0],size) != SUCCESS):
+                            message.destroy()
+                            return
                         self.update_orders()
                         self.update_portfolio()
-            if(market_open): self.wait_for_confirm_sell_order()
-
+            if(market_open and self.queue_orders): self.wait_for_confirm_sell_order() #TODO: fix entering here even if not seling anything
+        
         if(self.cash - self.queue_buying_money + self.queue_selling_money >= self.trade_size_cash - self.leverage_amount):
             symbols_buy_ratings = get_buy_ratings(self)
             symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
@@ -153,7 +160,7 @@ class Portfolio:
         print(f'{symbol} Order confirmed')
         return SUCCESS
 
-    def wait_for_confirm_sell_order(self):
+    def wait_for_confirm_sell_order(self): 
         finish_sell_orders = False
         found = False
         while(not finish_sell_orders):
@@ -294,7 +301,7 @@ class Portfolio:
                 if(buy_or_sell == 'Sell'):
                     queue_sell_money = queue_sell_money + (int(size) * float(order_price))  
             elif(status_description == 'Filled'):
-                self.queue_orders[symbol] = {'Quantity': size, 'Filled Price': order['FilledPrice'] ,'Open Time': open_time, 'Order Type': order_type,
+                self.filled_orders[symbol] = {'Quantity': size, 'Filled Price': order['FilledPrice'] ,'Open Time': open_time, 'Order Type': order_type,
                         'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
                 self.orders[symbol] = {'Quantity': size, 'Filled Price': order['FilledPrice'] ,'Open Time': open_time, 'Order Type': order_type,
                         'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
