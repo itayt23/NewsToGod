@@ -888,7 +888,7 @@ def get_all_articles(id):
 
 def run_articles_news_processor(start_date, stop_date,sector,start_run_time):
     articles = {}
-    articles_id = articles_sentiment(start_date, stop_date,category)
+    articles_id = articles_sentiment(start_date, stop_date,sector)
     count = 0
     with ThreadPoolExecutor(max_workers=5) as executor:
         all_articles = executor.map(get_all_articles, articles_id)
