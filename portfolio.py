@@ -44,7 +44,7 @@ class Portfolio:
         self.market_sentiment = market_sentiment
         self.sectors_sentiment = sectors_sentiment
         self.etfs = {'XLC':['XLC','FIVG','IYZ','VR'],'XLY':['XLY','XHB', 'PEJ', 'IBUY','BJK','BETZ''AWAY','SOCL','BFIT','KROP'],'XLP':['XLP','FTXG','KXI','PBJ'],
-                    'XLE':['XLE','FTXN','ICLN'],'XLF':['XLF','KIE','KCE','KRE'],'XLV':['XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG','EDOC'],
+                    'XLE':['XLE','FTXN','ICLN'],'XLF':['XLF','KIE','KCE','KRE'],'XLV':['XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG'],#EDOC
                     'XLI':['XLI','AIRR','IFRA','IGF','SIMS'],'XLK':['XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR'],'XLU':['XLU','FIW','FAN'],
                     'XLRE':['XLRE','KBWY','SRVR','VPN','GRNR'],'XLB':['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']}
         self.etfs_to_buy = get_best_etfs(self)
@@ -111,7 +111,6 @@ class Portfolio:
     def run_buy_and_sell_strategy(self,automate):
         message =  tk.Tk()
         message.geometry("250x250")
-        message.focus_force() #TODO: try it to see if its make focus!
         market_open = self.market_open()
         answer = True
         sold_symbols = []
@@ -128,7 +127,7 @@ class Portfolio:
                             return
                         self.update_orders()
                         self.update_portfolio()
-            if(market_open and self.queue_orders): self.wait_for_confirm_sell_order() #TODO: fix entering here even if not seling anything
+            if(market_open and self.queue_orders): self.wait_for_confirm_sell_order() #TODO: need to fix sell symbol, close app- enter and still wanna tobuy problem
         
         if(self.cash - self.queue_buying_money + self.queue_selling_money >= self.trade_size_cash - self.leverage_amount):
             symbols_buy_ratings = get_buy_ratings(self)
@@ -378,7 +377,7 @@ def get_sell_rating(self):
 
 def buy_rate(data_monthly,data_weekly,data_day,etf,market_rank):
     rank = 0
-    rank += market_rank
+    # rank += market_rank
     today = date.today()
     buy_ret = {'rank':rank,'price': 0}
     seq_daily = SequenceMethod(data_day,'day',today)
@@ -428,7 +427,7 @@ def buy_rate(data_monthly,data_weekly,data_day,etf,market_rank):
         if(data_day.loc[str(today - timedelta(days=3)),'SMA13'] > data_day.loc[str(today - timedelta(days=3)),'SMA5'] and data_day.loc[str(today - timedelta(days=5)),'SMA13'] > data_day.loc[str(today - timedelta(days=5)),'SMA5']):
             rank += 1
     except:
-        rank += 0
+        rank += 0   
     try:
         if(first_monthly_date <= last_month and data_monthly.loc[str(last_month),'SMA13'] > data_monthly.loc[str(last_month),'SMA5']):
             rank += 1
@@ -448,7 +447,7 @@ def buy_rate(data_monthly,data_weekly,data_day,etf,market_rank):
 
 def sell_rate(self,data_monthly,data_weekly,data_day,symbol,market_rank):
     rank = 0
-    rank = rank + (market_rank*(-1))
+    # rank = rank + (market_rank*(-1))
     today = date.today()
     sell_ret = {'rank':rank}
     seq_daily = SequenceMethod(data_day,'day',today)

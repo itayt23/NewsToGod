@@ -973,5 +973,25 @@ def articles_2021():
 
 # BackTestingCorona()
 
-articles_2021()
+# articles_2021()
+SMA1 = 'SMA4'
+SMA2 = 'SMA8'
+
+path_articels = Path.cwd() / 'Results' / 'BackTesting' / 'Articles 2021' / 'articles_sentiment_2021_TOTAL.csv'
+path_articels_dir = Path.cwd() / 'Results' / 'BackTesting' / 'Articles 2021' 
+articles_df = pd.read_csv(path_articels)
+articles_df[SMA1] = articles_df['Avg'].rolling(4).mean()
+articles_df[SMA2] = articles_df['Avg'].rolling(8).mean()
+articles_df['Signal'] = ''
+for row,column in articles_df.iterrows():
+    if(articles_df.loc[row][SMA1] > articles_df.loc[row][SMA2]):
+        articles_df.at[row,'Signal'] = 'BUY'
+    elif(articles_df.loc[row][SMA1] < articles_df.loc[row][SMA2]):
+        articles_df.at[row,'Signal'] = 'SELL'
+    else:
+        articles_df.at[row,'Signal'] = 'NONE'
+
+articles_df.to_csv(path_articels_dir / f"articles_sentiment_2021_SMA4&8.csv")
+
+    
 
