@@ -81,7 +81,7 @@ class MyBacktestBase(object):
         self.holdings = {}
         self.today = None
         self.trade_log = pd.DataFrame(columns=['Date','Buy\Sell','Ticker','Position','Buy\Sell Price','Trade Return','Days Hold',
-        'Cash','Net Wealth','Total Trades','Portfolio Yield','Hold Yield','Avg Gain','Avg Days Hold','Win Rate'])
+        'Cash','Net Wealth','Total Trades','Portfolio Yield','Hold Yield','Avg Gain','Avg Days Hold','Win Rate','Rules'])
 
 
     def print_balance(self, entry_date):
@@ -90,9 +90,8 @@ class MyBacktestBase(object):
     def print_net_wealth(self, entry_date,net_wealth):
         print(f'{entry_date} | current net wealth(cash + holdings) {net_wealth:.2f}')
 
-    def place_buy_order(self, symbol, data_daily,entry_price):
+    def place_buy_order(self, symbol, entry_date,entry_price,buy_rules):
         new_row = {}
-        entry_date =  data_daily.index[0].date()
         position = int(self.trade_money_investing / entry_price)
         self.cash -= (position * entry_price) + (position * self.ptc) + self.ftc
         self.holdings[symbol] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position, 'Red Weeks': 0}
@@ -104,16 +103,16 @@ class MyBacktestBase(object):
         new_row['Buy\Sell Price'] = entry_price
         new_row['Cash'] = self.cash
         new_row['Net Wealth'] = net_wealth
+        new_row['Rules'] = buy_rules
         self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        self.trade_log.to_csv(results_path / f"seq_strategy.csv")
+        self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
         if self.verbose:
             print(f'{entry_date} | buying {symbol}, {position} units at {entry_price:.2f}')
             self.print_balance(entry_date)
             self.print_net_wealth(entry_date,net_wealth)
 
-    def place_sell_order(self, symbol,data_daily,selling_price):
+    def place_sell_order(self, symbol,selling_date,selling_price,sell_rules=""):
         new_row = {}
-        selling_date = data_daily.index[0].date()
         # selling_date = datetime.strptime(selling_date,'%Y-%m-%d')
         days_hold = (selling_date - self.holdings[symbol]['Entry Date']).days
         self.total_days_hold += days_hold
@@ -142,29 +141,30 @@ class MyBacktestBase(object):
         new_row['Net Wealth'] = net_wealth
         new_row['Total Trades'] = self.trades
         new_row['Portfolio Yield'] = (net_wealth - self.initial_amount)/self.initial_amount*100
+        new_row['Rules'] = sell_rules
         try:
             new_row['Win Rate'] = self.win_trades/self.trades*100
         except:    
             new_row['Win Rate'] = 0
         self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        self.trade_log.to_csv(results_path / f"seq_strategy.csv")
+        self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
         if self.verbose:
             print(f'{self.today} | selling {symbol}, {position} units at {selling_price:.2f}')
             self.print_balance(self.today)
             self.print_net_wealth(self.today,net_wealth)
 
-    def close_out(self):
+    def close_out(self,day):
         symbol_to_sell =[]
         for symbol in self.holdings.items():
             symbol_to_sell.append(symbol[0])
         for symbol in symbol_to_sell:
             data_daily = yf.download(symbol,start = self.today, end= (self.today +timedelta(days=3)),progress=False)
-            sell_price = data_daily['Open'][0]
-            self.place_sell_order(symbol,data_daily,sell_price)
+            sell_price = data_daily.loc[str(day),'Open']
+            self.place_sell_order(symbol,day,sell_price)
         new_row = {}
         new_row['Hold Yield'] = self.benchmark_yield
         self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        self.trade_log.to_csv(results_path / f"seq_strategy.csv")
+        self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
 
 
 
