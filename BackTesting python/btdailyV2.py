@@ -15,7 +15,7 @@ import calendar
 # add IUSV ETF? and xlu
 #stochastin low rank + 1 in buy rate?
 
-BUY_RANK = 5
+BUY_RANK = 6
 SELL_RANK = 5
 SELL_RANK_HARD = 7
 
@@ -33,7 +33,6 @@ class Backtest(MyBacktestBase):
 
     def run_seq_strategy(self):
         symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU']
-        # symbols = ['XLV']
         symbols_sell_ratings = {}
         symbols_buy_ratings = {}
         symbol_data_weekly = pd.DataFrame(yf.download(tickers='SPY', period='5y',interval='1d',progress=False)).dropna()
@@ -67,7 +66,7 @@ class Backtest(MyBacktestBase):
                         data_daily = yf.download(symbol[0],start = day, end= (day +timedelta(days=3)),progress=False)
                         price = data_daily.loc[str(day),'Open']
                         self.place_buy_order(symbol[0],day,price,symbol[1]['rules'])
-        self.close_out(day)
+        self.close_out(self.today)
        
 
     def buy_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,day):
