@@ -16,8 +16,8 @@ from tkinter import messagebox
 
 ACCOUNT_ID = 11509188
 STARTING_AMOUNT = 1000000
-BUY_RANK = 5
-SELL_RANK = 5
+BUY_RANK = 6
+SELL_RANK = 6
 TRADE_SIZE = 0.25
 LEVERAGE_SIZE = 0.02
 SUCCESS = 1
@@ -506,16 +506,18 @@ def sell_rate(self,data_monthly,data_weekly,data_day,symbol,market_rank):
 
 def is_moving_away_weekly(data_weekly,today,pre_week):
     try:
-        if((data_weekly.loc[str(today),'SMA13'] - data_weekly.loc[str(today),'SMA5']) > (data_weekly.loc[str(pre_week),'SMA13'] - data_weekly.loc[str(pre_week),'SMA5'])):
-            return True
+        if(data_weekly.loc[str(today),'SMA13'] > data_weekly.loc[str(today),'SMA5']):
+            if((data_weekly.loc[str(today),'SMA13'] - data_weekly.loc[str(today),'SMA5']) > (data_weekly.loc[str(pre_week),'SMA13'] - data_weekly.loc[str(pre_week),'SMA5'])):
+                return True
     except:
         return False
     return False
 
 def is_moving_away_monthly(data_monthly,last_month,pre_month):
     try:
-        if((data_monthly.loc[str(last_month),'SMA13'] - data_monthly.loc[str(last_month),'SMA5']) > (data_monthly.loc[str(pre_month),'SMA13'] - data_monthly.loc[str(pre_month),'SMA5'])):
-            return True
+        if(data_monthly.loc[str(last_month),'SMA13'] > data_monthly.loc[str(last_month),'SMA5']):
+            if((data_monthly.loc[str(last_month),'SMA13'] - data_monthly.loc[str(last_month),'SMA5']) > (data_monthly.loc[str(pre_month),'SMA13'] - data_monthly.loc[str(pre_month),'SMA5'])):
+                return True
     except:
         return False
     return False
