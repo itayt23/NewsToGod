@@ -4,15 +4,7 @@ from pathlib import Path
 from datetime import date,datetime,timedelta
 import yfinance as yf
 import numpy as np
-# import yfinance.shared as shared
 
-
-
-#Add counter of consective red weeks for sell rate
-#ADd 0.75 from weekly move +1
-#dont buy week after week
-# add IUSV ETF? and xlu
-#stochastin low rank + 1 in buy rate?
 
 BUY_RANK = 6
 SELL_RANK = 5
@@ -97,10 +89,6 @@ class Backtest(MyBacktestBase):
             pre_3_month = pre_3_month - timedelta(days=1)
             pre_3_month = pre_3_month.replace(day = 1)
         last_seq_date = seq_daily.get_seq_df()['Date'].iloc[-1]
-        # print(f'last day is: {str(last_day.index[-1])}')
-        # print(f'diff is: {(last_day.index[-1].date() - last_seq_date).days}')
-        # print(f"close price {last_day.loc[str(last_day.index[-1]),'Close']}")
-        # print(f"SMA13 price {data_day.loc[str(last_day.index[-1]),'SMA13']}")
         ##################START BUY RULES#######################
         if(float(data_day.loc[str(last_day.index[-1]),'Close']) > float(data_day.loc[str(last_day.index[-1]),'SMA13']) and check_seq_by_date_daily(seq_daily.get_seq_df(),day) == 1
                 and (last_day.index[-1].date() - last_seq_date).days == 0):
@@ -325,22 +313,6 @@ def check_seq_price_by_date_weekly(seq,date):
 def run_strategies():
     # xlc.run_seq_strategy_trades(13, 5)
     pass
-def get_daily_data(symbol):
-    match symbol:
-        case 'XLK':
-            return "Dsa"
-        case 'XLV':
-            return "Not found"
-        case 'XLE':
-            return "I'm a teapot"
-        case 'XLC':
-            return "I'm a teapot"
-        case 'XLRE':
-            return "I'm a teapot"
-        case 'XLU':
-            return "I'm a teapot"
-        case _:
-            return "Something's wrong with the internet"
 
 def atr_calculate(data):
     high_low = data['High'] - data['Low']
@@ -349,13 +321,8 @@ def atr_calculate(data):
     ranges = pd.concat([high_low, high_close, low_close], axis=1)
     true_range = np.max(ranges, axis=1).dropna()
     atr = true_range.rolling(14).sum()/14
-    # print(type(atr))
     data['ATR'] = atr
     
-# def get_weekly_data(symbol):
-# def get_monthly_data(symbol):
-# data_output = pd.DataFrame(columns=['Symbol','Period','Strategy Yield','Hold Yield','Trades','Win Rate'])
-# data_output_trades = pd.DataFrame(columns=['Date','Buy\Sell','Price','Trade Yield','Days Hold'])
 
 symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU']
 symbols_daily_df= {}
@@ -375,7 +342,6 @@ for symbol in symbols:
     atr_calculate(symbols_daily_df[symbol])
     atr_calculate(symbols_weekly_df[symbol])
     atr_calculate(symbols_monthly_df[symbol])
-
     symbols_monthly_df[symbol].dropna()
     symbols_weekly_df[symbol].dropna()
 
@@ -388,18 +354,5 @@ if __name__ == '__main__':
     portfolio = Backtest(amount=1000000,start=start_date,end=end_date,ptc=0.005)
     portfolio.run_seq_strategy()
             
-    # for day in trading_days:
-    #     with ThreadPoolExecutor(max_workers=8) as executor:
-    #         all_prints = executor.map(get_best_fit, symbols)
-    #         executor.shutdown(wait=True)
-    #     print(day)
-
-
-
-
-        # get_best_fit(symbols,day)
-    # xlc = BacktestLongOnly('XLC', '2000-1-1', '2022-08-05',1000000, ptc=0.005, verbose=True)
-    # run_strategies()
-    # data_output_trades.to_csv(results_path / f"XLC_trades.csv")
 
     
