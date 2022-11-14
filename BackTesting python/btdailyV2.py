@@ -1,13 +1,12 @@
-import traceback
 from mybacktestingbase import *
 from sequencing import SequenceMethod
-import talib as ta
 from pathlib import Path
 from datetime import date,datetime,timedelta
 import requests
 import os
-import calendar
-import yfinance.shared as shared
+import yfinance as yf
+import numpy as np
+# import yfinance.shared as shared
 
 
 
@@ -19,7 +18,7 @@ import yfinance.shared as shared
 
 BUY_RANK = 6
 SELL_RANK = 5
-SELL_RANK_HARD = 9
+SELL_RANK_HARD = 8
 
 
 ###BEST 3 ETFS####
@@ -45,6 +44,7 @@ class Backtest(MyBacktestBase):
         trading_days = trading_days[286:] #Start of 2019 was 286
         for day in trading_days:
             self.today = day
+            sold_now = []
             print(day)
             symbols_sell_ratings = get_sell_ratings(self,day)
             if(symbols_sell_ratings != None):
@@ -57,14 +57,16 @@ class Backtest(MyBacktestBase):
                     trade_return = (selling_price - self.holdings[symbol[0]]['Avg Price'])/self.holdings[symbol[0]]['Avg Price']*100
                     if(days_hold < 14):
                         if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-10))):
+                            sold_now.append(symbol[0])
                             self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'])
                     elif(symbol[1]['rank'] >= SELL_RANK):
+                        sold_now.append(symbol[0])
                         self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'])
             if(self.cash > self.leverage_amount): 
                 symbols_buy_ratings = get_buy_ratings(self,symbols,day)
                 symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
                 for symbol in symbols_buy_ratings.items():
-                    if(symbol[1]['rank'] >= BUY_RANK and not self.is_holding(symbol[0]) and self.cash > self.leverage_amount):
+                    if(symbol[1]['rank'] >= BUY_RANK and not self.is_holding(symbol[0]) and self.cash > self.leverage_amount and (symbol[0] not in sold_now)):
                         price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
                         self.place_buy_order(symbol[0],day,price,symbol[1]['rules'])
         self.close_out(self.today)
@@ -86,14 +88,6 @@ class Backtest(MyBacktestBase):
         daily_price = data_day.loc[str(day),'Open']
         if(daily_price != None and start_move_price != None): move_return = (daily_price - start_move_price)/start_move_price*100
         else: move_return = None
-        data_day['SMA13'] = ta.SMA(data_day['Close'],timeperiod=13)
-        data_day['SMA5'] = ta.SMA(data_day['SMA13'], timeperiod=5)
-        symbol_data_weekly['SMA13'] = ta.SMA(symbol_data_weekly['Close'],timeperiod=13)
-        symbol_data_weekly['SMA5'] = ta.SMA(symbol_data_weekly['SMA13'], timeperiod=5)
-        symbol_data_month['SMA13'] = ta.SMA(symbol_data_month['Close'],timeperiod=13)
-        symbol_data_month['SMA5'] = ta.SMA(symbol_data_month['SMA13'], timeperiod=5)
-        symbol_data_month = symbol_data_month.dropna()
-        symbol_data_weekly = symbol_data_weekly.dropna()
         first_monthly_date = symbol_data_month.index[0].date()
         first_weekly_date = symbol_data_weekly.index[0].date()
         month = day.replace(day=1)
@@ -166,14 +160,6 @@ class Backtest(MyBacktestBase):
         last_day = data_day.truncate(before=last_day, after=day)
         last_day = last_day.tail(2)
         last_day = last_day.head(1)
-        data_day['SMA13'] = ta.SMA(data_day['Close'],timeperiod=13)
-        data_day['SMA5'] = ta.SMA(data_day['SMA13'], timeperiod=5)
-        symbol_data_weekly['SMA13'] = ta.SMA(symbol_data_weekly['Close'],timeperiod=13)
-        symbol_data_weekly['SMA5'] = ta.SMA(symbol_data_weekly['SMA13'], timeperiod=5)
-        symbol_data_month['SMA13'] = ta.SMA(symbol_data_month['Close'],timeperiod=13)
-        symbol_data_month['SMA5'] = ta.SMA(symbol_data_month['SMA13'], timeperiod=5)
-        symbol_data_month = symbol_data_month.dropna()
-        symbol_data_weekly = symbol_data_weekly.dropna()
         first_monthly_date = symbol_data_month.index[0].date()
         first_weekly_date = symbol_data_weekly.index[0].date()
         month = day.replace(day=1)
@@ -374,6 +360,16 @@ def get_daily_data(symbol):
             return "I'm a teapot"
         case _:
             return "Something's wrong with the internet"
+
+def atr_calculate(data):
+    high_low = data['High'] - data['Low']
+    high_close = np.abs(data['High'] - data['Close'].shift())
+    low_close = np.abs(data['Low'] - data['Close'].shift())
+    ranges = pd.concat([high_low, high_close, low_close], axis=1)
+    true_range = np.max(ranges, axis=1).dropna()
+    atr = true_range.rolling(14).sum()/14
+    # print(type(atr))
+    data['ATR'] = atr
     
 # def get_weekly_data(symbol):
 # def get_monthly_data(symbol):
@@ -388,6 +384,19 @@ for symbol in symbols:
     symbols_daily_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='5y',interval='1d',progress=False)).dropna())
     symbols_weekly_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='5y',interval='1wk',progress=False)).dropna())
     symbols_monthly_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='5y',interval='1mo',progress=False)).dropna())
+
+    symbols_daily_df[symbol]['SMA13'] = symbols_daily_df[symbol]['Close'].rolling(window=13).mean()
+    symbols_daily_df[symbol]['SMA5'] = symbols_daily_df[symbol]['SMA13'].rolling(window=5).mean()
+    symbols_weekly_df[symbol]['SMA13'] = symbols_weekly_df[symbol]['Close'].rolling(window=13).mean()
+    symbols_weekly_df[symbol]['SMA5'] = symbols_weekly_df[symbol]['SMA13'].rolling(window=5).mean()
+    symbols_monthly_df[symbol]['SMA13'] = symbols_monthly_df[symbol]['Close'].rolling(window=13).mean()
+    symbols_monthly_df[symbol]['SMA5'] = symbols_monthly_df[symbol]['SMA13'].rolling(window=5).mean()
+    atr_calculate(symbols_daily_df[symbol])
+    atr_calculate(symbols_weekly_df[symbol])
+    atr_calculate(symbols_monthly_df[symbol])
+
+    symbols_monthly_df[symbol].dropna()
+    symbols_weekly_df[symbol].dropna()
 
 if __name__ == '__main__':
     results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
