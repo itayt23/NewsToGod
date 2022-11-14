@@ -1,16 +1,8 @@
-from distutils.dep_util import newer_group
-from importlib.metadata import SelectableGroups
-from turtle import position
-from types import new_class
-import numpy as np
 import pandas as pd
-from pylab import mpl, plt
 import yfinance as yf
-from sequencing import SequenceMethod
 from datetime import date,datetime,timedelta
 from pathlib import Path
-plt.style.use('seaborn')
-mpl.rcParams['font.family'] = 'serif'
+
 
 results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
 if not results_path.exists():

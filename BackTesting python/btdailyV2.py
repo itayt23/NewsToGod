@@ -2,8 +2,6 @@ from mybacktestingbase import *
 from sequencing import SequenceMethod
 from pathlib import Path
 from datetime import date,datetime,timedelta
-import requests
-import os
 import yfinance as yf
 import numpy as np
 # import yfinance.shared as shared
@@ -249,23 +247,6 @@ def is_moving_away_monthly(data_monthly,last_month,pre_month):
     except:
         return False
     return False
-
-
-def get_sa_rank(symbol):
-    try:
-        url = "https://seeking-alpha.p.rapidapi.com/symbols/get-ratings"
-        querystring = {"symbol":symbol}
-        headers = {'x-rapidapi-host': "seeking-alpha.p.rapidapi.com",
-                'x-rapidapi-key': os.getenv('sa_api_key')} 
-        response = requests.request("GET", url, headers=headers, params=querystring)
-        ranking = response.json()
-    except Exception as e:
-        print("Problem with SeekingAlpha WebSite: "+str(e))
-    try:
-        quant_rating = ranking['data'][0]['attributes']['ratings']['quantRating']
-    except:
-        quant_rating = 0
-    return quant_rating
 
 def get_seq_month_week(symbol,week,symbol_data_month,symbol_data_weekly):
     data_monthly = symbol_data_month

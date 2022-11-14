@@ -1,23 +1,12 @@
-from errno import EOWNERDEAD
-from socketserver import DatagramRequestHandler
-from turtle import up
-from grpc import UnaryStreamClientInterceptor
-from importlib_metadata import entry_points
-from openpyxl import load_workbook
-from regex import P
 import yfinance as yf
 import pandas as pd
 from datetime import date,datetime,timedelta
 import calendar
-from pathlib import Path
-from dotenv import load_dotenv
 import matplotlib.pyplot as plt
-import seaborn as sns
 import matplotlib.pyplot as plt
 from mplfinance.original_flavor import candlestick_ohlc
 import pandas as pd
 import matplotlib.dates as mpdates
-import numpy as np
 
 
 
