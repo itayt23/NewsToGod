@@ -8,7 +8,7 @@ import numpy as np
 
 BUY_RANK = 6
 SELL_RANK = 5
-SELL_RANK_HARD = 8
+SELL_RANK_HARD = 9
 
 
 ###BEST 3 ETFS####
@@ -24,7 +24,8 @@ class Backtest(MyBacktestBase):
 
     def run_seq_strategy(self):
         global symbols_daily_df,symbols_weekly_df,symbols_monthly_df
-        symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU']
+        symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL','DVY','DXJ','GLD','SMH','TLT',
+                    'XBI','EEM','XHB','XRT','XLY','VGK','XOP','VGT','FDN','HACK','SKYY','KRE','XLF','XLB']
         symbols_sell_ratings = {}
         symbols_buy_ratings = {}
         trading_days = symbols_daily_df['XLK']
@@ -42,7 +43,8 @@ class Backtest(MyBacktestBase):
                 for symbol in symbols_sell_ratings.items():
                     if(symbol[1]['rank'] < SELL_RANK): continue
                     selling_date = day
-                    days_hold = (selling_date - self.holdings[symbol[0]]['Entry Date']).days
+                    try: days_hold = (selling_date - self.holdings[symbol[0]]['Entry Date']).days
+                    except: days_hold = (selling_date - self.holdings[symbol[0]]['Entry Date'][0]).days
                     selling_price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
                     trade_return = (selling_price - self.holdings[symbol[0]]['Avg Price'])/self.holdings[symbol[0]]['Avg Price']*100
                     if(days_hold < 14):
@@ -56,9 +58,12 @@ class Backtest(MyBacktestBase):
                 symbols_buy_ratings = get_buy_ratings(self,symbols,day)
                 symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
                 for symbol in symbols_buy_ratings.items():
-                    if(symbol[1]['rank'] >= BUY_RANK and not self.is_holding(symbol[0]) and self.cash > self.leverage_amount and (symbol[0] not in sold_now)):
+                    if(symbol[1]['rank'] >= BUY_RANK and not self.is_holding_full_size(symbol[0]) and self.cash > self.leverage_amount and (symbol[0] not in sold_now)):
                         price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
-                        self.place_buy_order(symbol[0],day,price,symbol[1]['rules'])
+                        position_size = 1
+                        if('4' not in symbol[1]['rules']): position_size = 0.5
+                        if(self.is_holding(symbol[0])) : position_size = 1 - self.holdings[symbol[0]]['Position Size']
+                        self.place_buy_order(symbol[0],day,price,symbol[1]['rules'],position_size)
         self.close_out(self.today)
        
 
@@ -196,6 +201,11 @@ class Backtest(MyBacktestBase):
             if(ticker[0] == symbol): return True
         return False
 
+    def is_holding_full_size(self,symbol):
+        for ticker in self.holdings.items():
+            if(ticker[0] == symbol and ticker[1]['Position Size'] == 1): return True
+        return False
+
 def get_buy_ratings(self,symbols,day):
     global symbols_daily_df,symbols_weekly_df,symbols_monthly_df
     rating = {}
@@ -324,7 +334,8 @@ def atr_calculate(data):
     data['ATR'] = atr
     
 
-symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU']
+symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL','DVY','DXJ','GLD','SMH','TLT',
+                    'XBI','EEM','XHB','XRT','XLY','VGK','XOP','VGT','FDN','HACK','SKYY','KRE','XLF','XLB']
 symbols_daily_df= {}
 symbols_weekly_df= {}
 symbols_monthly_df= {}

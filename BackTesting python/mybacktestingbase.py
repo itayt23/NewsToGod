@@ -54,10 +54,12 @@ class MyBacktestBase(object):
         self.amount = amount
         self.cash = amount
         self.exposure = exposure
-        self.leverage_amount = 0.02 * self.initial_amount
+        self.leverage_amount = 0.01 * self.initial_amount
+        self.price_gap_precent = 0.001
         self.ptc = ptc
         self.ftc = ftc
-        self.trade_money_investing = exposure * amount
+        self.position_money_size = exposure * amount
+        self.position_half_size = (exposure/2) * amount
         self.position = 0
         self.trades = 0
         self.total_gain = 0
@@ -82,11 +84,20 @@ class MyBacktestBase(object):
     def print_net_wealth(self, entry_date,net_wealth):
         print(f'{entry_date} | current net wealth(cash + holdings) {net_wealth:.2f}')
 
-    def place_buy_order(self, symbol, entry_date,entry_price,buy_rules):
+    def place_buy_order(self, symbol, entry_date,entry_price,buy_rules,position_size = 1):
         new_row = {}
-        position = int(self.trade_money_investing / entry_price)
+            
+        entry_price = entry_price + (self.price_gap_precent*entry_price)
+        position = int((self.position_money_size*position_size) / entry_price)
         self.cash -= (position * entry_price) + (position * self.ptc) + self.ftc
-        self.holdings[symbol] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position, 'Red Weeks': 0}
+        if(symbol in self.holdings):
+            last_size = self.holdings[symbol]['Position']
+            avg_price = ((self.holdings[symbol]['Avg Price'] * last_size) + (entry_price * position)) / (last_size+position)
+            dates = [self.holdings[symbol]['Entry Date']]
+            dates.append(entry_date)
+            position_size = self.holdings[symbol]['Position Size'] + position_size
+            self.holdings[symbol] = {'Avg Price': avg_price, 'Entry Date': dates, 'Position':last_size+position, 'Red Weeks': 0, 'Position Size': position_size}
+        else: self.holdings[symbol] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position, 'Red Weeks': 0, 'Position Size': position_size}
         net_wealth = self.get_new_wealth()
         new_row['Ticker'] = symbol
         new_row['Date'] = entry_date
@@ -105,8 +116,9 @@ class MyBacktestBase(object):
 
     def place_sell_order(self, symbol,selling_date,selling_price,sell_rules=""):
         new_row = {}
-        # selling_date = datetime.strptime(selling_date,'%Y-%m-%d')
-        days_hold = (selling_date - self.holdings[symbol]['Entry Date']).days
+        selling_price = selling_price - (self.price_gap_precent*selling_price)
+        try: days_hold = (selling_date - self.holdings[symbol]['Entry Date']).days
+        except: days_hold = (selling_date - self.holdings[symbol]['Entry Date'][0]).days
         self.total_days_hold += days_hold
         position = self.holdings[symbol]['Position']
         self.cash += (position * selling_price) - (position * self.ptc) + self.ftc
@@ -120,7 +132,7 @@ class MyBacktestBase(object):
         new_row['Avg Gain'] = self.avg_gain
         del self.holdings[symbol]
         net_wealth = self.get_new_wealth()
-        self.trade_money_investing = self.exposure * net_wealth
+        self.position_money_size = self.exposure * net_wealth
         self.leverage_amount = 0.02 * net_wealth
         new_row['Days Hold'] = days_hold
         new_row['Avg Days Hold'] = self.total_days_hold / self.trades

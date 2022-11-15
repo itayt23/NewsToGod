@@ -193,7 +193,7 @@ class Backtest(MyBacktestBase):
         return rank
             
     def check_buy(self,symbol_data_month,symbol_data_weekly,symbol,week):
-        if(self.cash - self.trade_money_investing >= ((-1)*self.leverage_amount) and not self.is_holding(symbol)):
+        if(self.cash - self.position_money_size >= ((-1)*self.leverage_amount) and not self.is_holding(symbol)):
             seq_month, seq_weekly = get_seq_month_week(symbol,week,symbol_data_month,symbol_data_weekly)
             data_weekly = symbol_data_weekly.loc[symbol].T
             data_monthly = symbol_data_month.loc[symbol].T
@@ -283,7 +283,7 @@ class Backtest(MyBacktestBase):
                 continue
         if(len(symbols_winners) != 0):
                 for symbol in symbols_winners.items():
-                    if(self.cash - portfolio.trade_money_investing >= (-20000) and not self.is_holding(symbol[0])):
+                    if(self.cash - portfolio.position_money_size >= (-20000) and not self.is_holding(symbol[0])):
                         self.place_buy_order(symbol)
 
 
