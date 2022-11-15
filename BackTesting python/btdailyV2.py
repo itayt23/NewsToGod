@@ -5,7 +5,7 @@ from datetime import date,datetime,timedelta
 import yfinance as yf
 import numpy as np
 
-
+#line 64 check maybe need to check more deeply
 BUY_RANK = 6
 SELL_RANK = 5
 SELL_RANK_HARD = 9
@@ -34,6 +34,7 @@ class Backtest(MyBacktestBase):
             trading_days[i] = trading_days[i].date()
         trading_days = trading_days[286:] #Start of 2019 was 286
         for day in trading_days:
+            position_size = 1
             self.today = day
             sold_now = []
             print(day)
@@ -50,18 +51,33 @@ class Backtest(MyBacktestBase):
                     if(days_hold < 14):
                         if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-10))):
                             sold_now.append(symbol[0])
-                            self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'])
+                            self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
+                    elif(symbols_daily_df[symbol[0]].loc[str(day),'ATRP'] >= 6):
+                        position_size = 1
+                        sold_now.append(symbol[0])
+                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
+                    elif(symbols_daily_df[symbol[0]].loc[str(day),'ATRP'] >= 5):
+                        position_size = 0.75
+                        sold_now.append(symbol[0])
+                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
+                    elif(symbols_daily_df[symbol[0]].loc[str(day),'ATRP'] >= 4):
+                        position_size = 0.5
+                        sold_now.append(symbol[0])
+                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
+                    elif(symbols_daily_df[symbol[0]].loc[str(day),'ATRP'] >= 3):
+                        position_size = 0.25
+                        sold_now.append(symbol[0])
+                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
                     elif(symbol[1]['rank'] >= SELL_RANK):
                         sold_now.append(symbol[0])
-                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'])
+                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
             if(self.cash > self.leverage_amount): 
                 symbols_buy_ratings = get_buy_ratings(self,symbols,day)
                 symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
                 for symbol in symbols_buy_ratings.items():
                     if(symbol[1]['rank'] >= BUY_RANK and not self.is_holding_full_size(symbol[0]) and self.cash > self.leverage_amount and (symbol[0] not in sold_now)):
                         price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
-                        position_size = 1
-                        if('4' not in symbol[1]['rules']): position_size = 0.5
+                        if(not symbol[1]['seq_month']): position_size = 0.5
                         if(self.is_holding(symbol[0])) : position_size = 1 - self.holdings[symbol[0]]['Position Size']
                         self.place_buy_order(symbol[0],day,price,symbol[1]['rules'],position_size)
         self.close_out(self.today)
@@ -69,8 +85,9 @@ class Backtest(MyBacktestBase):
 
     def buy_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,day):
         rank = 0
+        stop_check = False
         buy_rules = []
-        buy_ret = {'rank':rank,'rules': buy_rules}
+        buy_ret = {'rank':rank,'rules': buy_rules,'seq_month':False}
         seq_month  = SequenceMethod(symbol_data_month,'monthly',day)
         seq_weekly =  SequenceMethod(symbol_data_weekly,'weekly',day)
         seq_daily = SequenceMethod(data_day,'day',day)
@@ -103,12 +120,16 @@ class Backtest(MyBacktestBase):
             rank += 1
             buy_rules.append('3')
         else :
+            stop_check = True
+        if(check_seq_by_date_monthly(seq_month.get_seq_df(),day) == 1):
+            buy_ret['seq_month'] = True
+            if(not stop_check):
+                rank += 2
+                buy_rules.append('4')
+        if(stop_check):
             buy_ret['rank'] = rank
             buy_ret['rules'] = buy_rules
             return buy_ret
-        if(check_seq_by_date_monthly(seq_month.get_seq_df(),day) == 1):
-            rank += 2
-            buy_rules.append('4')
         try:
             if(data_day.loc[str(day),'SMA13'] > data_day.loc[str(day),'SMA5'] and data_day.loc[str(day+ timedelta(days=1)),'SMA13'] > data_day.loc[str(day+ timedelta(days=1)),'SMA5']):
                 rank += 1
@@ -353,16 +374,21 @@ for symbol in symbols:
     atr_calculate(symbols_daily_df[symbol])
     atr_calculate(symbols_weekly_df[symbol])
     atr_calculate(symbols_monthly_df[symbol])
+    symbols_daily_df[symbol]['ATRP'] = (symbols_daily_df[symbol]['ATR']/symbols_daily_df[symbol]['Close'])*100
+    symbols_weekly_df[symbol]['ATRP'] = (symbols_weekly_df[symbol]['ATR']/symbols_weekly_df[symbol]['Close'])*100
+    symbols_monthly_df[symbol]['ATRP'] = (symbols_monthly_df[symbol]['ATR']/symbols_monthly_df[symbol]['Close'])*100
     symbols_monthly_df[symbol].dropna()
     symbols_weekly_df[symbol].dropna()
 
 if __name__ == '__main__':
+    symbols_daily_df,symbols_weekly_df,symbols_monthly_df
     results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
     if not results_path.exists():
         results_path.mkdir(parents=True)
     start_date = datetime.strptime('2019-01-01','%Y-%m-%d')
     end_date = datetime.strptime('2022-11-02','%Y-%m-%d')
-    portfolio = Backtest(amount=1000000,start=start_date,end=end_date,ptc=0.005)
+    portfolio = Backtest(start=start_date,end=end_date,amount=1000000,symbols_daily_df=symbols_daily_df,
+                            symbols_weekly_df=symbols_weekly_df,symbols_monthly_df=symbols_monthly_df,ptc=0.005)
     portfolio.run_seq_strategy()
             
 

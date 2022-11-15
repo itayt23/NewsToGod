@@ -46,8 +46,11 @@ class MyBacktestBase(object):
         closes out a long or short position
     '''
 
-    def __init__(self, start, end, amount, exposure = 0.25,
+    def __init__(self, start, end, amount,symbols_daily_df,symbols_weekly_df,symbols_monthly_df, exposure = 0.25,
                  ftc=0.0, ptc=0.0, verbose=True):
+        self.daily_df = symbols_daily_df
+        self.weekly_df = symbols_weekly_df
+        self.monthly = symbols_monthly_df
         self.start = start
         self.end = end
         self.initial_amount = amount
@@ -89,6 +92,9 @@ class MyBacktestBase(object):
             
         entry_price = entry_price + (self.price_gap_precent*entry_price)
         position = int((self.position_money_size*position_size) / entry_price)
+        position_cost = (position * entry_price) + (position * self.ptc) + self.ftc
+        if(position_cost < self.leverage_amount) : 
+            position = int(self.cash / entry_price)
         self.cash -= (position * entry_price) + (position * self.ptc) + self.ftc
         if(symbol in self.holdings):
             last_size = self.holdings[symbol]['Position']
@@ -114,13 +120,15 @@ class MyBacktestBase(object):
             self.print_balance(entry_date)
             self.print_net_wealth(entry_date,net_wealth)
 
-    def place_sell_order(self, symbol,selling_date,selling_price,sell_rules=""):
+    def place_sell_order(self, symbol,selling_date,selling_price,sell_rules="",position_size=1):
         new_row = {}
         selling_price = selling_price - (self.price_gap_precent*selling_price)
         try: days_hold = (selling_date - self.holdings[symbol]['Entry Date']).days
         except: days_hold = (selling_date - self.holdings[symbol]['Entry Date'][0]).days
         self.total_days_hold += days_hold
-        position = self.holdings[symbol]['Position']
+        position = int(self.holdings[symbol]['Position']*position_size)
+        self.holdings[symbol]['Position'] = self.holdings[symbol]['Position'] - position
+        self.holdings[symbol]['Position Size'] = position_size
         self.cash += (position * selling_price) - (position * self.ptc) + self.ftc
         self.trades += 1
         if(self.holdings[symbol]['Avg Price'] < selling_price):
@@ -130,7 +138,7 @@ class MyBacktestBase(object):
         self.total_gain += trade_return
         self.avg_gain = self.total_gain / self.trades
         new_row['Avg Gain'] = self.avg_gain
-        del self.holdings[symbol]
+        if(self.holdings[symbol]['Position'] == 0): del self.holdings[symbol]
         net_wealth = self.get_new_wealth()
         self.position_money_size = self.exposure * net_wealth
         self.leverage_amount = 0.02 * net_wealth
@@ -162,8 +170,7 @@ class MyBacktestBase(object):
         for symbol in self.holdings.items():
             symbol_to_sell.append(symbol[0])
         for symbol in symbol_to_sell:
-            data_daily = yf.download(symbol,start = self.today, end= (self.today +timedelta(days=3)),progress=False)
-            sell_price = data_daily.loc[str(day),'Open']
+            sell_price = self.daily_df[symbol[0]].loc[str(self.today),'Open']
             self.place_sell_order(symbol,day,sell_price)
         new_row = {}
         new_row['Hold Yield'] = self.benchmark_yield
@@ -175,8 +182,7 @@ class MyBacktestBase(object):
     def get_new_wealth(self):
         money_inside = 0
         for symbol in self.holdings.items():
-            data_daily = yf.download(symbol[0],start = self.today, end= (self.today +timedelta(days=3)),progress=False)
-            today_price = data_daily['Open'][0]
+            today_price =  self.daily_df[symbol[0]].loc[str(self.today),'Open']
             position = symbol[1]['Position']
             money_inside += today_price*position
         return money_inside + self.cash
