@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import date,datetime,timedelta
 import yfinance as yf
 import numpy as np
+import json
 
 #line 64 check maybe need to check more deeply
 BUY_RANK = 6
@@ -32,43 +33,30 @@ class Backtest(MyBacktestBase):
         trading_days = trading_days.index.to_list()
         for i in range(len(trading_days)):
             trading_days[i] = trading_days[i].date()
-        trading_days = trading_days[286:] #Start of 2019 was 286
+        trading_days = trading_days[280:] #Start of 2019 was 286
         for day in trading_days:
             position_size = 1
             self.today = day
             sold_now = []
-            print(day)
+            # print(day)
             symbols_sell_ratings = get_sell_ratings(self,day)
             if(symbols_sell_ratings != None):
                 # symbols_sell_ratings = {key:value for key, value in sorted(symbols_sell_ratings.items(), key=lambda x: x[1],reverse=True)}
                 for symbol in symbols_sell_ratings.items():
                     if(symbol[1]['rank'] < SELL_RANK): continue
                     selling_date = day
-                    try: days_hold = (selling_date - self.holdings[symbol[0]]['Entry Date']).days
-                    except: days_hold = (selling_date - self.holdings[symbol[0]]['Entry Date'][0]).days
+                    entry_date = self.holdings[symbol[0]]['Entry Date']
+                    if(type(entry_date) is list): days_hold = (selling_date - entry_date[0]).days
+                    else: days_hold = (selling_date - entry_date).days
                     selling_price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
                     trade_return = (selling_price - self.holdings[symbol[0]]['Avg Price'])/self.holdings[symbol[0]]['Avg Price']*100
                     if(days_hold < 14):
                         if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-10))):
+                            position_size = sell_rule_to_position_size(symbol[1]['rules'])
                             sold_now.append(symbol[0])
                             self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                    elif(symbols_daily_df[symbol[0]].loc[str(day),'ATRP'] >= 6):
-                        position_size = 1
-                        sold_now.append(symbol[0])
-                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                    elif(symbols_daily_df[symbol[0]].loc[str(day),'ATRP'] >= 5):
-                        position_size = 0.75
-                        sold_now.append(symbol[0])
-                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                    elif(symbols_daily_df[symbol[0]].loc[str(day),'ATRP'] >= 4):
-                        position_size = 0.5
-                        sold_now.append(symbol[0])
-                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                    elif(symbols_daily_df[symbol[0]].loc[str(day),'ATRP'] >= 3):
-                        position_size = 0.25
-                        sold_now.append(symbol[0])
-                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
                     elif(symbol[1]['rank'] >= SELL_RANK):
+                        position_size = sell_rule_to_position_size(symbol[1]['rules'])
                         sold_now.append(symbol[0])
                         self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
             if(self.cash > self.leverage_amount): 
@@ -201,18 +189,19 @@ class Backtest(MyBacktestBase):
                 sell_rules.append('5')
         except:
             rank += 0
-        if(trade_yield >= avg_weekly_move*0.75):
-            rank += 1
+        if(float(symbols_daily_df[symbol].loc[str(day),'ATRP'])*6 <= trade_yield):
+            rank += SELL_RANK_HARD
             sell_rules.append('6')
-        if(trade_yield >= avg_weekly_move):
-            rank += 1
+        elif(float(symbols_daily_df[symbol].loc[str(day),'ATRP'])*5 <= trade_yield):
+            rank += SELL_RANK_HARD
             sell_rules.append('7')
-        if(trade_yield >= avg_weekly_move*1.25): #was 2
-            rank += 1
+        elif(float(symbols_daily_df[symbol].loc[str(day),'ATRP'])*4 <= trade_yield):
+            rank += SELL_RANK_HARD
             sell_rules.append('8')
-        if(trade_yield >= avg_weekly_move*1.5): #was 3
-            rank += 1
+        elif(float(symbols_daily_df[symbol].loc[str(day),'ATRP'])*3 <= trade_yield):
+            rank += SELL_RANK_HARD
             sell_rules.append('9')
+           
         sell_ret['rank'] = rank
         sell_ret['rules'] = sell_rules
         return sell_ret
@@ -353,6 +342,13 @@ def atr_calculate(data):
     true_range = np.max(ranges, axis=1).dropna()
     atr = true_range.rolling(14).sum()/14
     data['ATR'] = atr
+
+def sell_rule_to_position_size(rule):
+    if('6' in rule): return 1
+    if('7' in rule): return 0.75
+    if('8' in rule): return 0.5
+    if('9' in rule): return 0.25
+    return 1
     
 
 symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL','DVY','DXJ','GLD','SMH','TLT',
@@ -381,6 +377,7 @@ for symbol in symbols:
     symbols_weekly_df[symbol].dropna()
 
 if __name__ == '__main__':
+# try:
     symbols_daily_df,symbols_weekly_df,symbols_monthly_df
     results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
     if not results_path.exists():
@@ -390,6 +387,10 @@ if __name__ == '__main__':
     portfolio = Backtest(start=start_date,end=end_date,amount=1000000,symbols_daily_df=symbols_daily_df,
                             symbols_weekly_df=symbols_weekly_df,symbols_monthly_df=symbols_monthly_df,ptc=0.005)
     portfolio.run_seq_strategy()
+    # except Exception as ex:
+    #     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
+    #     message = template.format(type(ex).__name__, ex.args)
+    #     print(message)
             
 
     

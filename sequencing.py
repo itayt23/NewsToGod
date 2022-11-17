@@ -2,11 +2,8 @@ import yfinance as yf
 import pandas as pd
 from datetime import date,datetime,timedelta
 import calendar
-import matplotlib.pyplot as plt
-import matplotlib.pyplot as plt
 from mplfinance.original_flavor import candlestick_ohlc
 import pandas as pd
-import matplotlib.dates as mpdates
 
 
 
@@ -88,75 +85,75 @@ class SequenceMethodSymbol:
 
 
            
-    def plot_graph(self,interval):
-        up_seq_x = []
-        up_seq_y = []
-        down_seq_x = []
-        down_seq_y = []
-        seq_df = pd.DataFrame
-        symbol_df = pd.DataFrame
-        width = 0
-        if(interval == 'day'):
-            seq_df = self.sequence_1d
-            symbol_df =  self.symbol_data_1d
-            width = 1
-            size = 10 
-        if(interval == 'week'):
-            seq_df = self.sequence_1wk
-            symbol_df =  self.symbol_data_1wk
-            width = 2
-            size = 10 
-        if(interval == 'month'):
-            seq_df = self.sequence_1mo
-            symbol_df =  self.symbol_data_1mo
-            width = 4
-            size = 20 
-        for index,row in seq_df.iterrows():
-            if(row["Sequence"] == 1):
-                up_seq_x.append(row["Date"])
-                up_seq_y.append(row["Entry Price"])
-            else:
-                down_seq_x.append(row["Date"])
-                down_seq_y.append(row["Entry Price"])
+    # def plot_graph(self,interval):
+    #     up_seq_x = []
+    #     up_seq_y = []
+    #     down_seq_x = []
+    #     down_seq_y = []
+    #     seq_df = pd.DataFrame
+    #     symbol_df = pd.DataFrame
+    #     width = 0
+    #     if(interval == 'day'):
+    #         seq_df = self.sequence_1d
+    #         symbol_df =  self.symbol_data_1d
+    #         width = 1
+    #         size = 10 
+    #     if(interval == 'week'):
+    #         seq_df = self.sequence_1wk
+    #         symbol_df =  self.symbol_data_1wk
+    #         width = 2
+    #         size = 10 
+    #     if(interval == 'month'):
+    #         seq_df = self.sequence_1mo
+    #         symbol_df =  self.symbol_data_1mo
+    #         width = 4
+    #         size = 20 
+    #     for index,row in seq_df.iterrows():
+    #         if(row["Sequence"] == 1):
+    #             up_seq_x.append(row["Date"])
+    #             up_seq_y.append(row["Entry Price"])
+    #         else:
+    #             down_seq_x.append(row["Date"])
+    #             down_seq_y.append(row["Entry Price"])
 
-        plt.style.use('seaborn-dark')
-        # plt.style.use('ggplot')
-        # plt.style.use('dark_background')
-        # plt.style.use('fivethirtyeight')
-        # plt.style.use('grayscale')
+    #     plt.style.use('seaborn-dark')
+    #     # plt.style.use('ggplot')
+    #     # plt.style.use('dark_background')
+    #     # plt.style.use('fivethirtyeight')
+    #     # plt.style.use('grayscale')
         
-        # convert into datetime object
-        symbol_df['Date'] = pd.to_datetime(symbol_df['Date'])
+    #     # convert into datetime object
+    #     symbol_df['Date'] = pd.to_datetime(symbol_df['Date'])
 
-        # apply map function
-        symbol_df['Date'] = symbol_df['Date'].map(mpdates.date2num)
+    #     # apply map function
+    #     symbol_df['Date'] = symbol_df['Date'].map(mpdates.date2num)
         
-        # creating Subplots
-        fig, ax = plt.subplots()
+    #     # creating Subplots
+    #     fig, ax = plt.subplots()
         
-        # plotting the data
+    #     # plotting the data
     
-        candlestick_ohlc(ax, symbol_df.values, width = width,
-                        colorup = 'green', colordown = 'red',
-                        alpha = 0.8)
+    #     candlestick_ohlc(ax, symbol_df.values, width = width,
+    #                     colorup = 'green', colordown = 'red',
+    #                     alpha = 0.8)
         
-        # allow grid
-        ax.grid(True)
+    #     # allow grid
+    #     ax.grid(True)
         
-        # Setting labels
-        ax.set_xlabel('Date')
-        ax.set_ylabel('Price')
+    #     # Setting labels
+    #     ax.set_xlabel('Date')
+    #     ax.set_ylabel('Price')
         
-        # setting title
-        plt.title('Candelsticks')
-        # Formatting Date
-        date_format = mpdates.DateFormatter('%d-%m-%Y')
-        ax.xaxis.set_major_formatter(date_format)
-        fig.autofmt_xdate()
-        fig.tight_layout()
-        plt.scatter(up_seq_x,up_seq_y,marker='^',facecolors='green',s=size)
-        plt.scatter(down_seq_x,down_seq_y,marker='v',facecolors='red',s=size)
-        plt.show()
+    #     # setting title
+    #     plt.title('Candelsticks')
+    #     # Formatting Date
+    #     date_format = mpdates.DateFormatter('%d-%m-%Y')
+    #     ax.xaxis.set_major_formatter(date_format)
+    #     fig.autofmt_xdate()
+    #     fig.tight_layout()
+    #     plt.scatter(up_seq_x,up_seq_y,marker='^',facecolors='green',s=size)
+    #     plt.scatter(down_seq_x,down_seq_y,marker='v',facecolors='red',s=size)
+    #     plt.show()
 
 def build_sequences(self):
     seq_1d = pd.DataFrame
