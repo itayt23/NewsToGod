@@ -8,32 +8,22 @@ import json
 
 #line 64 check maybe need to check more deeply
 BUY_RANK = 6
-SELL_RANK = 5
+SELL_RANK = 8
 SELL_RANK_HARD = 9
 
-
-###BEST 3 ETFS####
-# - XLK - 87.37
-#XLV - 46.54
-#XLE - 45.94
-###WORST 3 ETFS###
-#XLC - 1
-#XLRE - 6 
-#XLU - 21.02
-#ALL AVG IS: 34.645
 class Backtest(MyBacktestBase):
 
     def run_seq_strategy(self):
-        global symbols_daily_df,symbols_weekly_df,symbols_monthly_df
-        symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL','DVY','DXJ','GLD','SMH','TLT',
-                    'XBI','EEM','XHB','XRT','XLY','VGK','XOP','VGT','FDN','HACK','SKYY','KRE','XLF','XLB']
+        global symbols_daily_df,symbols_weekly_df,symbols_monthly_df,symbols
         symbols_sell_ratings = {}
         symbols_buy_ratings = {}
         trading_days = symbols_daily_df['XLK']
         trading_days = trading_days.index.to_list()
+        strat_index = 278
         for i in range(len(trading_days)):
             trading_days[i] = trading_days[i].date()
-        trading_days = trading_days[280:] #Start of 2019 was 286
+            if(self.start.date() == trading_days[i]): strat_index = i
+        trading_days = trading_days[strat_index:]
         for day in trading_days:
             position_size = 1
             self.today = day
@@ -51,7 +41,7 @@ class Backtest(MyBacktestBase):
                     selling_price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
                     trade_return = (selling_price - self.holdings[symbol[0]]['Avg Price'])/self.holdings[symbol[0]]['Avg Price']*100
                     if(days_hold < 14):
-                        if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-10))):
+                        if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-8))):
                             position_size = sell_rule_to_position_size(symbol[1]['rules'])
                             sold_now.append(symbol[0])
                             self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
@@ -65,6 +55,7 @@ class Backtest(MyBacktestBase):
                 for symbol in symbols_buy_ratings.items():
                     if(symbol[1]['rank'] >= BUY_RANK and not self.is_holding_full_size(symbol[0]) and self.cash > self.leverage_amount and (symbol[0] not in sold_now)):
                         price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
+                        position_size = 1
                         if(not symbol[1]['seq_month']): position_size = 0.5
                         if(self.is_holding(symbol[0])) : position_size = 1 - self.holdings[symbol[0]]['Position Size']
                         self.place_buy_order(symbol[0],day,price,symbol[1]['rules'],position_size)
@@ -85,7 +76,12 @@ class Backtest(MyBacktestBase):
         last_day = last_day.tail(2)
         last_day = last_day.head(1)
         start_move_price = check_seq_price_by_date_weekly(seq_weekly.get_seq_df(),day)
-        daily_price = data_day.loc[str(day),'Open']
+        try:
+            daily_price = data_day.loc[str(day),'Open']
+        except:
+            buy_ret['rank'] = 0
+            buy_ret['rules'] = buy_rules
+            return buy_ret
         if(daily_price != None and start_move_price != None): move_return = (daily_price - start_move_price)/start_move_price*100
         else: move_return = None
         first_monthly_date = symbol_data_month.index[0].date()
@@ -171,7 +167,7 @@ class Backtest(MyBacktestBase):
             pre_month = pre_month - timedelta(days=1)
             pre_month = pre_month.replace(day = 1) #!Check if its ok
         ################START OF RULES##################################
-        if(float(last_day.loc[str(last_day.index[-1]),'Close']) < float(data_day.loc[str(last_day.index[-1]),'SMA13']) and check_seq_by_date_daily(seq_daily.get_seq_df(),day) == -1):
+        if(float(last_day.loc[str(last_day.index[-1]),'Close']) < float(data_day.loc[str(last_day.index[-1]),'SMA5']) and check_seq_by_date_daily(seq_daily.get_seq_df(),day) == -1):
             rank += 5
             sell_rules.append("2")
         if(check_seq_by_date_weekly(seq_weekly.get_seq_df(),day) == -1):
@@ -350,16 +346,16 @@ def sell_rule_to_position_size(rule):
     if('9' in rule): return 0.25
     return 1
     
-
+#AVG RETURN SICE 02/01/2015 - 152.59%
 symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL','DVY','DXJ','GLD','SMH','TLT',
                     'XBI','EEM','XHB','XRT','XLY','VGK','XOP','VGT','FDN','HACK','SKYY','KRE','XLF','XLB']
 symbols_daily_df= {}
 symbols_weekly_df= {}
 symbols_monthly_df= {}
 for symbol in symbols:
-    symbols_daily_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='5y',interval='1d',progress=False)).dropna())
-    symbols_weekly_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='5y',interval='1wk',progress=False)).dropna())
-    symbols_monthly_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='5y',interval='1mo',progress=False)).dropna())
+    symbols_daily_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='10y',interval='1d',progress=False)).dropna())
+    symbols_weekly_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='10y',interval='1wk',progress=False)).dropna())
+    symbols_monthly_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='10y',interval='1mo',progress=False)).dropna())
 
     symbols_daily_df[symbol]['SMA13'] = symbols_daily_df[symbol]['Close'].rolling(window=13).mean()
     symbols_daily_df[symbol]['SMA5'] = symbols_daily_df[symbol]['SMA13'].rolling(window=5).mean()
@@ -382,7 +378,7 @@ if __name__ == '__main__':
     results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
     if not results_path.exists():
         results_path.mkdir(parents=True)
-    start_date = datetime.strptime('2019-01-01','%Y-%m-%d')
+    start_date = datetime.strptime('2015-01-02','%Y-%m-%d')
     end_date = datetime.strptime('2022-11-02','%Y-%m-%d')
     portfolio = Backtest(start=start_date,end=end_date,amount=1000000,symbols_daily_df=symbols_daily_df,
                             symbols_weekly_df=symbols_weekly_df,symbols_monthly_df=symbols_monthly_df,ptc=0.005)

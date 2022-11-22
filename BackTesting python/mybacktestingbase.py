@@ -94,10 +94,13 @@ class MyBacktestBase(object):
             
         entry_price = entry_price + (self.price_gap_precent*entry_price)
         position = int((self.position_money_size*position_size) / entry_price)
-        # position_cost = (position * entry_price) + (position * self.ptc) + self.ftc
-        # if(position_cost < self.leverage_amount) : 
-        #     position = int(self.cash / entry_price)
-        self.cash -= (position * entry_price) + (position * self.ptc) + self.ftc
+        position_cost = (position * entry_price) + (position * self.ptc) + self.ftc
+        if(position_cost > self.cash+self.leverage_amount) : 
+            position = int(self.cash / entry_price)
+        new_position_cost = (position * entry_price) + (position * self.ptc) + self.ftc
+        if(new_position_cost != position_cost):
+            position_size = round((new_position_cost/position_cost)*position_size,1)
+        self.cash -= new_position_cost
         if(symbol in self.holdings):
             last_size = self.holdings[symbol]['Position']
             avg_price = ((self.holdings[symbol]['Avg Price'] * last_size) + (entry_price * position)) / (last_size+position)
@@ -119,7 +122,7 @@ class MyBacktestBase(object):
         new_row['Net Wealth'] = net_wealth
         new_row['Rules'] = buy_rules
         self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
+        self.trade_log.to_csv(results_path / f"backtesting_8sell.csv")
         if self.verbose:
             print(f'{entry_date} | buying {symbol}, {position} units at {entry_price:.2f}')
             self.print_balance(entry_date)
@@ -167,7 +170,7 @@ class MyBacktestBase(object):
         except:    
             new_row['Win Rate'] = 0
         self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
+        self.trade_log.to_csv(results_path / f"backtesting_8sell.csv")
         if self.verbose:
             print(f'{self.today} | selling {symbol}, {position} units at {selling_price:.2f}')
             self.print_balance(self.today)
@@ -183,7 +186,7 @@ class MyBacktestBase(object):
         new_row = {}
         new_row['Hold Yield'] = self.benchmark_yield
         self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
+        self.trade_log.to_csv(results_path / f"backtesting_8sell.csv")
 
 
 
