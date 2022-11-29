@@ -2,9 +2,13 @@ import pandas as pd
 import yfinance as yf
 from datetime import date,datetime,timedelta
 from pathlib import Path
-
+from google.cloud import storage
 
 LEVERAGE = 0.01
+MINIMUN_ENTER_POSITION_SIZE = 0.5
+MINIMUN_SELL_POSITION_SIZE = 0.2
+MAXIMUM_POSITION_SIZE = 0.75
+
 
 results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
 if not results_path.exists():
@@ -91,7 +95,6 @@ class MyBacktestBase(object):
 
     def place_buy_order(self, symbol, entry_date,entry_price,buy_rules,position_size = 1):
         new_row = {}
-            
         entry_price = entry_price + (self.price_gap_precent*entry_price)
         position = int((self.position_money_size*position_size) / entry_price)
         position_cost = (position * entry_price) + (position * self.ptc) + self.ftc
@@ -100,7 +103,10 @@ class MyBacktestBase(object):
         new_position_cost = (position * entry_price) + (position * self.ptc) + self.ftc
         if(new_position_cost != position_cost):
             position_size = round((new_position_cost/position_cost)*position_size,1)
+            if(position_size < MINIMUN_ENTER_POSITION_SIZE): return
         self.cash -= new_position_cost
+        avg_price = entry_price
+        last_size = 0
         if(symbol in self.holdings):
             last_size = self.holdings[symbol]['Position']
             avg_price = ((self.holdings[symbol]['Avg Price'] * last_size) + (entry_price * position)) / (last_size+position)
@@ -110,8 +116,9 @@ class MyBacktestBase(object):
                 dates.append(entry_date)
             else: dates = [last_entry_dates,entry_date]
             position_size = self.holdings[symbol]['Position Size'] + position_size
-            self.holdings[symbol] = {'Avg Price': avg_price, 'Entry Date': dates, 'Position':last_size+position, 'Red Weeks': 0, 'Position Size': position_size}
-        else: self.holdings[symbol] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position, 'Red Weeks': 0, 'Position Size': position_size}
+            sold_quarter = self.holdings[symbol]['Sold Quarter']
+            self.holdings[symbol] = {'Avg Price': avg_price, 'Entry Date': dates, 'Position':last_size+position, 'Red Weeks': 0, 'Position Size': position_size, 'Sold Quarter': sold_quarter}
+        else: self.holdings[symbol] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position, 'Red Weeks': 0, 'Position Size': position_size,'Sold Quarter': False}
         net_wealth = self.get_new_wealth()
         new_row['Ticker'] = symbol
         new_row['Date'] = entry_date
@@ -121,27 +128,34 @@ class MyBacktestBase(object):
         new_row['Cash'] = self.cash
         new_row['Net Wealth'] = net_wealth
         new_row['Rules'] = buy_rules
-        self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        self.trade_log.to_csv(results_path / f"backtesting_8sell.csv")
+        self.trade_log = pd.concat([self.trade_log,pd.DataFrame([new_row])],ignore_index=True)
+        # self.trade_log = self.trade_log.append(new_row, ignore_index=True)
+        self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
         if self.verbose:
             print(f'{entry_date} | buying {symbol}, {position} units at {entry_price:.2f}')
             self.print_balance(entry_date)
             self.print_net_wealth(entry_date,net_wealth)
+            print(f'Total Hold: {last_size+position} | Position Size: {position_size} | Avg cost: {avg_price} | Buy Rules: {buy_rules}')
+            print('##################################################')
 
     def place_sell_order(self, symbol,selling_date,selling_price,sell_rules="",position_size=1):
+        deleted = False
         new_row = {}
         selling_price = selling_price - (self.price_gap_precent*selling_price)
         try: days_hold = (selling_date - self.holdings[symbol]['Entry Date']).days
         except: days_hold = (selling_date - self.holdings[symbol]['Entry Date'][0]).days
         self.total_days_hold += days_hold
         self.holdings[symbol]['Position Size'] = self.holdings[symbol]['Position Size'] - position_size
-        if(self.holdings[symbol]['Position Size'] <= 0 ):
+        if(self.holdings[symbol]['Position Size'] < MINIMUN_SELL_POSITION_SIZE ):
             self.holdings[symbol]['Position Size'] = 0
             position_size = 1
         position = int(self.holdings[symbol]['Position']*position_size)
         self.holdings[symbol]['Position'] = self.holdings[symbol]['Position'] - position
         self.cash += (position * selling_price) - (position * self.ptc) + self.ftc
         self.trades += 1
+        if('9' in sell_rules and position_size == 0.25):
+            self.holdings[symbol]['Sold Quarter'] = True
+            self.holdings[symbol]['Sold Quarter Date'] = self.today
         if(self.holdings[symbol]['Avg Price'] < selling_price):
             self.win_trades += 1
         trade_return = (selling_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
@@ -149,7 +163,9 @@ class MyBacktestBase(object):
         self.total_gain += trade_return
         self.avg_gain = self.total_gain / self.trades
         new_row['Avg Gain'] = self.avg_gain
-        if(self.holdings[symbol]['Position'] == 0): del self.holdings[symbol]
+        if(self.holdings[symbol]['Position'] == 0):
+            del self.holdings[symbol]
+            deleted = True
         net_wealth = self.get_new_wealth()
         self.position_money_size = self.exposure * net_wealth
         self.leverage_amount = LEVERAGE * net_wealth
@@ -169,12 +185,22 @@ class MyBacktestBase(object):
             new_row['Win Rate'] = self.win_trades/self.trades*100
         except:    
             new_row['Win Rate'] = 0
-        self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        self.trade_log.to_csv(results_path / f"backtesting_8sell.csv")
+        self.trade_log = pd.concat([self.trade_log,pd.DataFrame([new_row])],ignore_index=True)
+        # self.trade_log = self.trade_log.append(new_row, ignore_index=True)
+        self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
         if self.verbose:
             print(f'{self.today} | selling {symbol}, {position} units at {selling_price:.2f}')
             self.print_balance(self.today)
             self.print_net_wealth(self.today,net_wealth)
+            position_left = 0
+            position_left_size = 0
+            avg_price_size = 0
+            if(not deleted):
+                position_left = (self.holdings[symbol]['Position'])
+                position_left_size = self.holdings[symbol]['Position Size']
+                avg_price_size = self.holdings[symbol]['Avg Price']
+            print(f'Trade Yield: {trade_return} | Total Hold Left: {position_left} | Position Size Left: {position_left_size} | Avg price: {avg_price_size} | Sell Rules: {sell_rules}')
+            print('##################################################')
 
     def close_out(self,day):
         symbol_to_sell =[]
@@ -185,8 +211,12 @@ class MyBacktestBase(object):
             self.place_sell_order(symbol,day,sell_price)
         new_row = {}
         new_row['Hold Yield'] = self.benchmark_yield
-        self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        self.trade_log.to_csv(results_path / f"backtesting_8sell.csv")
+        self.trade_log = pd.concat([self.trade_log,pd.DataFrame([new_row])],ignore_index=True)
+        # self.trade_log = self.trade_log.append(new_row, ignore_index=True)
+        self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
+        # client = storage.Client(project='orbital-expanse-368511')
+        # bucket = client.get_bucket('backtesting_results')
+        # bucket.blob('back_testing_sell_quarter_once_7days.csv').upload_from_string(self.trade_log.to_csv(),'text/csv')
 
 
 

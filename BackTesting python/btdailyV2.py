@@ -5,11 +5,17 @@ from datetime import date,datetime,timedelta
 import yfinance as yf
 import numpy as np
 import json
+import time
+
+start_time = time.time()
 
 #line 64 check maybe need to check more deeply
 BUY_RANK = 6
-SELL_RANK = 8
+SELL_RANK = 5
 SELL_RANK_HARD = 9
+TOTAL_SELL_RANK = 19
+TOTAL_SELL_RANK_NO_SL = 10
+TIME_OUT = 59
 
 class Backtest(MyBacktestBase):
 
@@ -23,32 +29,42 @@ class Backtest(MyBacktestBase):
         for i in range(len(trading_days)):
             trading_days[i] = trading_days[i].date()
             if(self.start.date() == trading_days[i]): strat_index = i
-        trading_days = trading_days[strat_index:]
+        trading_days = trading_days[strat_index:] #Start of 2019 was 286
         for day in trading_days:
+            time_passed = (time.time() - start_time)/60
+            if(time_passed >= TIME_OUT):
+                break
             position_size = 1
             self.today = day
             sold_now = []
-            # print(day)
             symbols_sell_ratings = get_sell_ratings(self,day)
             if(symbols_sell_ratings != None):
                 # symbols_sell_ratings = {key:value for key, value in sorted(symbols_sell_ratings.items(), key=lambda x: x[1],reverse=True)}
                 for symbol in symbols_sell_ratings.items():
                     if(symbol[1]['rank'] < SELL_RANK): continue
+                    sold_quarter = False
                     selling_date = day
                     entry_date = self.holdings[symbol[0]]['Entry Date']
                     if(type(entry_date) is list): days_hold = (selling_date - entry_date[0]).days
                     else: days_hold = (selling_date - entry_date).days
+                    if('Sold Quarter Date' in  self.holdings[symbol[0]]):
+                        days_since_sold_quarter = (selling_date - self.holdings[symbol[0]]['Sold Quarter Date']).days
+                    else: days_since_sold_quarter = 0
                     selling_price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
                     trade_return = (selling_price - self.holdings[symbol[0]]['Avg Price'])/self.holdings[symbol[0]]['Avg Price']*100
                     if(days_hold < 14):
                         if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-8))):
-                            position_size = sell_rule_to_position_size(symbol[1]['rules'])
+                            position_size = sell_rule_to_position_size(symbol[1]['rules'],symbol[1]['rank'])
+                            if(self.holdings[symbol[0]]['Sold Quarter'] and position_size == 0.25 and days_since_sold_quarter < 7 ): sold_quarter = True
+                            if(not sold_quarter):
+                                sold_now.append(symbol[0])
+                                self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
+                    elif(symbol[1]['rank'] >= SELL_RANK):
+                        position_size = sell_rule_to_position_size(symbol[1]['rules'],symbol[1]['rank'])
+                        if(self.holdings[symbol[0]]['Sold Quarter'] and position_size == 0.25 and days_since_sold_quarter < 7 ): sold_quarter = True
+                        if(not sold_quarter):
                             sold_now.append(symbol[0])
                             self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                    elif(symbol[1]['rank'] >= SELL_RANK):
-                        position_size = sell_rule_to_position_size(symbol[1]['rules'])
-                        sold_now.append(symbol[0])
-                        self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
             if(self.cash > self.leverage_amount): 
                 symbols_buy_ratings = get_buy_ratings(self,symbols,day)
                 symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
@@ -56,7 +72,7 @@ class Backtest(MyBacktestBase):
                     if(symbol[1]['rank'] >= BUY_RANK and not self.is_holding_full_size(symbol[0]) and self.cash > self.leverage_amount and (symbol[0] not in sold_now)):
                         price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
                         position_size = 1
-                        if(not symbol[1]['seq_month']): position_size = 0.5
+                        # if(not symbol[1]['seq_month']): position_size = 0.5
                         if(self.is_holding(symbol[0])) : position_size = 1 - self.holdings[symbol[0]]['Position Size']
                         self.place_buy_order(symbol[0],day,price,symbol[1]['rules'],position_size)
         self.close_out(self.today)
@@ -76,12 +92,7 @@ class Backtest(MyBacktestBase):
         last_day = last_day.tail(2)
         last_day = last_day.head(1)
         start_move_price = check_seq_price_by_date_weekly(seq_weekly.get_seq_df(),day)
-        try:
-            daily_price = data_day.loc[str(day),'Open']
-        except:
-            buy_ret['rank'] = 0
-            buy_ret['rules'] = buy_rules
-            return buy_ret
+        daily_price = data_day.loc[str(day),'Open']
         if(daily_price != None and start_move_price != None): move_return = (daily_price - start_move_price)/start_move_price*100
         else: move_return = None
         first_monthly_date = symbol_data_month.index[0].date()
@@ -339,23 +350,33 @@ def atr_calculate(data):
     atr = true_range.rolling(14).sum()/14
     data['ATR'] = atr
 
-def sell_rule_to_position_size(rule):
+def sell_rule_to_position_size(rule,rank):
+    clean_rank = rank - SELL_RANK_HARD 
     if('6' in rule): return 1
-    if('7' in rule): return 0.75
-    if('8' in rule): return 0.5
-    if('9' in rule): return 0.25
+    if('7' in rule):
+        if(clean_rank >= 0.75*TOTAL_SELL_RANK_NO_SL): return 1
+        else: return 0.75
+    if('8' in rule):
+        if(clean_rank >= 0.75*TOTAL_SELL_RANK_NO_SL): return 1
+        if(clean_rank >= 0.5*TOTAL_SELL_RANK_NO_SL): return 0.75
+        if(clean_rank >= 0.3*TOTAL_SELL_RANK_NO_SL): return 0.5
+        else: return 0.5
+    if('9' in rule):
+        if(clean_rank >= 0.75*TOTAL_SELL_RANK_NO_SL): return 0.75
+        if(clean_rank >= 0.5*TOTAL_SELL_RANK_NO_SL): return 0.5
+        if(clean_rank >= 0.3*TOTAL_SELL_RANK_NO_SL): return 0.25
+        else: return 0.25
     return 1
     
-#AVG RETURN SICE 02/01/2015 - 152.59%
 symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL','DVY','DXJ','GLD','SMH','TLT',
-                    'XBI','EEM','XHB','XRT','XLY','VGK','XOP','VGT','FDN','HACK','SKYY','KRE','XLF','XLB']
+            'XBI','EEM','XHB','XRT','XLY','VGK','XOP','VGT','FDN','HACK','SKYY','KRE','XLF','XLB']
 symbols_daily_df= {}
 symbols_weekly_df= {}
 symbols_monthly_df= {}
 for symbol in symbols:
-    symbols_daily_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='10y',interval='1d',progress=False)).dropna())
-    symbols_weekly_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='10y',interval='1wk',progress=False)).dropna())
-    symbols_monthly_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='10y',interval='1mo',progress=False)).dropna())
+    symbols_daily_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='5y',interval='1d',progress=False)).dropna())
+    symbols_weekly_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='5y',interval='1wk',progress=False)).dropna())
+    symbols_monthly_df[symbol] = (pd.DataFrame(yf.download(tickers=symbol, period='5y',interval='1mo',progress=False)).dropna())
 
     symbols_daily_df[symbol]['SMA13'] = symbols_daily_df[symbol]['Close'].rolling(window=13).mean()
     symbols_daily_df[symbol]['SMA5'] = symbols_daily_df[symbol]['SMA13'].rolling(window=5).mean()
@@ -373,20 +394,21 @@ for symbol in symbols:
     symbols_weekly_df[symbol].dropna()
 
 if __name__ == '__main__':
-# try:
-    symbols_daily_df,symbols_weekly_df,symbols_monthly_df
-    results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
-    if not results_path.exists():
-        results_path.mkdir(parents=True)
-    start_date = datetime.strptime('2015-01-02','%Y-%m-%d')
-    end_date = datetime.strptime('2022-11-02','%Y-%m-%d')
-    portfolio = Backtest(start=start_date,end=end_date,amount=1000000,symbols_daily_df=symbols_daily_df,
-                            symbols_weekly_df=symbols_weekly_df,symbols_monthly_df=symbols_monthly_df,ptc=0.005)
-    portfolio.run_seq_strategy()
-    # except Exception as ex:
-    #     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
-    #     message = template.format(type(ex).__name__, ex.args)
-    #     print(message)
+    try:
+        symbols_daily_df,symbols_weekly_df,symbols_monthly_df
+        results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
+        if not results_path.exists():
+            results_path.mkdir(parents=True)
+        start_date = datetime.strptime('2019-01-02','%Y-%m-%d')
+        end_date = datetime.strptime('2022-11-02','%Y-%m-%d')
+        portfolio = Backtest(start=start_date,end=end_date,amount=1000000,symbols_daily_df=symbols_daily_df,
+                                symbols_weekly_df=symbols_weekly_df,symbols_monthly_df=symbols_monthly_df,ptc=0.005)
+        portfolio.run_seq_strategy()
+    except Exception as err:
+        template = "An exception occured:\n{0} of type {1} occurred. Arguments:\n{2!r}"
+        message = template.format(str(err),type(err).__name__, err.args)
+        print(json.dumps({"message": message, "severity": "ERROR"}))
+        exit(1)
             
 
     
