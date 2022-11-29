@@ -116,9 +116,10 @@ class MyBacktestBase(object):
                 dates.append(entry_date)
             else: dates = [last_entry_dates,entry_date]
             position_size = self.holdings[symbol]['Position Size'] + position_size
-            sold_quarter = self.holdings[symbol]['Sold Quarter']
-            self.holdings[symbol] = {'Avg Price': avg_price, 'Entry Date': dates, 'Position':last_size+position, 'Red Weeks': 0, 'Position Size': position_size, 'Sold Quarter': sold_quarter}
-        else: self.holdings[symbol] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position, 'Red Weeks': 0, 'Position Size': position_size,'Sold Quarter': False}
+            if('stoploss_rules' not in self.holdings[symbol]): stoploss_rules = []
+            else: stoploss_rules = self.holdings[symbol]['stoploss_rules']
+            self.holdings[symbol] = {'Avg Price': avg_price, 'Entry Date': dates, 'Position':last_size+position, 'Red Weeks': 0, 'Position Size': position_size,'stoploss_rules':stoploss_rules}
+        else: self.holdings[symbol] = {'Avg Price': entry_price, 'Entry Date': entry_date, 'Position':position, 'Red Weeks': 0, 'Position Size': position_size,}
         net_wealth = self.get_new_wealth()
         new_row['Ticker'] = symbol
         new_row['Date'] = entry_date
@@ -216,7 +217,7 @@ class MyBacktestBase(object):
         self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
         # client = storage.Client(project='orbital-expanse-368511')
         # bucket = client.get_bucket('backtesting_results')
-        # bucket.blob('back_testing_sell_quarter_once_7days.csv').upload_from_string(self.trade_log.to_csv(),'text/csv')
+        # bucket.blob('back_testing_stoploss_seperate.csv').upload_from_string(self.trade_log.to_csv(),'text/csv')
 
 
 
