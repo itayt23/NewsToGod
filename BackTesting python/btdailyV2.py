@@ -48,7 +48,7 @@ class Backtest(MyBacktestBase):
                     else: days_hold = (selling_date - entry_date).days
                     if(symbol[1]['rank'] >= SELL_RANK):
                         trade_return = (selling_price - self.holdings[symbol[0]]['Avg Price'])/self.holdings[symbol[0]]['Avg Price']*100
-                        if(days_hold < 14):
+                        if(days_hold < 15):
                             if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-8))):
                                 sold_now.append(symbol[0])
                                 self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
@@ -369,6 +369,8 @@ def get_stoploss_rule(rules):
     return NO_STOPLOSS
 
 #AVG RETURN SICE 02/01/2015 - 152.59%
+#AVG RETURN SICE 04/01/2016 - 91.0834%
+#AVG RETURN SICE 02/01/2019 - 34.645%
 symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL','DVY','DXJ','GLD','SMH','TLT',
             'XBI','EEM','XHB','XRT','XLY','VGK','XOP','VGT','FDN','HACK','SKYY','KRE','XLF','XLB']
 symbols_daily_df= {}
