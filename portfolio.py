@@ -17,13 +17,15 @@ from tkinter import messagebox
 ACCOUNT_ID = 11509188
 STARTING_AMOUNT = 1000000
 BUY_RANK = 6
-SELL_RANK = 6
+SELL_RANK = 5
+SELL_RANK_HARD = 9
 TRADE_SIZE = 0.25
-LEVERAGE_SIZE = 0.02
+LEVERAGE_SIZE = 0.01
 SUCCESS = 1
 FAILED_ORDER = -1
 FAIL = 0
 ERROR_ORDER = -1
+NO_STOPLOSS = 0
 
 class Portfolio:
 
@@ -47,7 +49,9 @@ class Portfolio:
                     'XLE':['XLE','FTXN','ICLN'],'XLF':['XLF','KIE','KCE','KRE'],'XLV':['XLV','XHE','XHS','GNOM','HTEC','PPH','AGNG'],#EDOC
                     'XLI':['XLI','AIRR','IFRA','IGF','SIMS'],'XLK':['XLK','HERO','FDN','IRBO','FINX','IHAK','SKYY','SNSR'],'XLU':['XLU','FIW','FAN'],
                     'XLRE':['XLRE','KBWY','SRVR','VPN','GRNR'],'XLB':['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']}
-        self.etfs_to_buy = get_best_etfs(self)
+        if(market_sentiment== None or sectors_sentiment == None): self.etfs_to_buy = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL',
+                                'DVY','DXJ','GLD','SMH','TLT','XBI','EEM','XHB','XRT','XLY','VGK','XOP','VGT','FDN','HACK','SKYY','KRE','XLF','XLB']
+        else: self.etfs_to_buy = get_best_etfs(self)
         self.update_orders()
     
     def get_start_amount(self):
@@ -354,17 +358,19 @@ def get_best_etfs(self):
 
 def get_buy_ratings(self):
     rating = {}
-    market_rank = self.market_sentiment.get_sentiment_score()
+    market_rank = 0
+    if(self.market_sentiment != None): market_rank = self.market_sentiment.get_sentiment_score()
     for etf in self.etfs_to_buy:
         symbol_data_day = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1d',progress=False)).dropna()
         symbol_data_month = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1mo',progress=False)).dropna()
         symbol_data_weekly = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1wk',progress=False)).dropna()
-        rating[etf] = buy_rate(symbol_data_month,symbol_data_weekly,symbol_data_day,etf,market_rank)
+        rating[etf] = buy_rate(self,symbol_data_month,symbol_data_weekly,symbol_data_day,etf,market_rank)
     return rating
 
 def get_sell_rating(self):
     rating = {}
-    market_rank = self.market_sentiment.get_sentiment_score()
+    market_rank = 0
+    if(self.market_sentiment != None): market_rank = self.market_sentiment.get_sentiment_score()
     if(not self.holdings):
         return None
     for symbol in self.holdings.items():
@@ -375,7 +381,7 @@ def get_sell_rating(self):
     return rating
 
 
-def buy_rate(data_monthly,data_weekly,data_day,etf,market_rank):
+def buy_rate(self,data_monthly,data_weekly,data_day,etf,market_rank):
     rank = 0
     # rank += market_rank
     today = date.today()
@@ -385,14 +391,13 @@ def buy_rate(data_monthly,data_weekly,data_day,etf,market_rank):
     seq_month = SequenceMethod(data_monthly,'monthly',today)
     avg_weekly_move = seq_weekly.get_avg_up_return()
     start_move_price = check_seq_price_by_date_weekly(seq_weekly.get_seq_df(),today)
-    try:
-        data_daily = yf.download(etf,start = (today - timedelta(days=5)), end= today,progress=False) 
-        daily_price = data_daily['Close'][-1]
-    except:
-        daily_price = None
+    last_day = today - timedelta(days=5)
+    last_day = data_day.truncate(before=last_day, after=today)
+    last_day = last_day.tail(2)
+    last_day = last_day.head(1)
+    daily_price =  get_symbol_price(self,etf)
     if(daily_price != None and start_move_price != None): move_return = (daily_price - start_move_price)/start_move_price*100
     else: move_return = None
-    last_day = data_daily.tail(1)
     data_day['SMA13'] = ta.SMA(data_day['Close'],timeperiod=13)
     data_day['SMA5'] = ta.SMA(data_day['SMA13'], timeperiod=5)
     data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
@@ -592,6 +597,16 @@ def print_order(status):
         print(status['Orders'][0]['Message'])
         return SUCCESS
 
+def get_symbol_price(self,symbol):
+    url = f"https://api.tradestation.com/v3/marketdata/quotes/{symbol}"
+    headers = {
+        "content-type": "application/json",
+        "Authorization": f'Bearer {self.trade_station.TOKENS.access_token}'
+    }
+
+    response = requests.request("GET", url, headers=headers)
+    response =  json.loads(response.text)
+    return float(response['Quotes'][0]['Last'])
 
 # # self.symbols_basket =  ['IYZ','XLY','XHB', 'PEJ','XLP','XLC','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
 #                 'XLK','FDN','XLU','FIW','FAN','XLRE','XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']

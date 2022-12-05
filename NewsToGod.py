@@ -26,7 +26,7 @@ layout = Layout()
 window = layout.setWindow(layout.getMainLayout())
 working = False
 updating_account = False
-sectors = markets = "None"
+sectors = markets = None
 ts_manager = 0
 ts_connect = False
 portfolio = None
@@ -281,8 +281,8 @@ def get_account_details():
         window['-MARKETS_SENTIMENT-'].update(markets.get_sentiment())
     except Exception:
         print(f"Problem with Getting Market\Sectors data, please restart and get them again. Problem Details: \n {traceback.format_exc()}")
-        updating_account = False 
-        return
+        # updating_account = False 
+        # return
     while(True):
         try:
             url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
@@ -326,10 +326,10 @@ def process_user_input():
         if event == "Load Markets Recommendation":
             load_markets_object()
         if event == "Connect TradeStation":
-            # if (sectors != "None" or sectors != 0) and (markets != "None" or markets != 0):
-            if sectors != "None" and markets != "None":
-                connect_trade_station()
-            else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
+            # if (sectors != None or sectors != 0) and (markets != None or markets != 0):
+            # if sectors != None and markets != None:
+            connect_trade_station()
+            # else: sg.popup_quick_message("Get Sentiments Before Connection!",auto_close_duration=5)
         if event == 'Run Full Automate Strategy':
             run_strategy('Full')
         if event == 'Run Semi Automate Strategy':

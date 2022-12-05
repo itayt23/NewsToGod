@@ -368,7 +368,7 @@ def get_stoploss_rule(rules):
     if('9' in rules): return '9'
     return NO_STOPLOSS
 
-#AVG RETURN SICE 02/01/2015 - 152.59%
+#AVG RETURN SICE 02/01/2015 - 152.59% !really?
 #AVG RETURN SICE 04/01/2016 - 91.0834%
 #AVG RETURN SICE 02/01/2019 - 34.645%
 symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL','DVY','DXJ','GLD','SMH','TLT',
