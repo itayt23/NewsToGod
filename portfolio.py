@@ -396,8 +396,10 @@ def buy_rate(self,data_monthly,data_weekly,data_day,etf,market_rank):
     last_5_days = today - timedelta(days=12)
     last_5_days = data_day.truncate(before=last_5_days, after=today)
     if(last_5_days.shape[0] >=5 ): last_5_days = last_5_days.tail(last_5_days.shape[0] - (last_5_days.shape[0] - 5)) 
-    if(self.market_open()):last_day = last_5_days.tail(2).head(1)
+    print(last_5_days)
+    if(self.market_open()):last_day = last_5_days.tail(2).head(1) #TODO: need tothink if this is what i want
     else: last_day = last_5_days.tail(1)
+    print(last_day)
     last_seq_date = seq_daily.get_seq_df()['Date'].iloc[-1]
     daily_price =  get_symbol_price(self,etf)
     if(daily_price != None and start_move_price != None): move_return = (daily_price - start_move_price)/start_move_price*100
@@ -471,8 +473,10 @@ def sell_rate(self,data_monthly,data_weekly,data_day,symbol,market_rank):
     last_5_days = today - timedelta(days=12)
     last_5_days = data_day.truncate(before=last_5_days, after=today)
     if(last_5_days.shape[0] >=5 ): last_5_days = last_5_days.tail(last_5_days.shape[0] - (last_5_days.shape[0] - 5)) 
+    print(last_day)
     if(self.market_open()):last_day = last_5_days.tail(2).head(1)
     else: last_day = last_5_days.tail(1)
+    print(last_day)
     daily_price =  get_symbol_price(self,symbol)
     trade_yield = float(self.holdings[symbol]['UnrealizedProfitLossPercent'])
     data_day['SMA13'] = ta.SMA(data_day['Close'],timeperiod=13)
