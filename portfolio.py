@@ -661,6 +661,21 @@ def get_symbol_price(self,symbol):
     response =  json.loads(response.text)
     return float(response['Quotes'][0]['Last'])
 
+
+def sell_rule_to_position_size(rule):
+    if(rule == '6'): return 1
+    if(rule == '7'): return 0.75
+    if(rule == '8'): return 0.5
+    if(rule == '9'): return 0.25
+    return NO_STOPLOSS
+
+def get_stoploss_rule(rules):
+    if('6' in rules): return '6'
+    if('7' in rules): return '7'
+    if('8' in rules): return '8'
+    if('9' in rules): return '9'
+    return NO_STOPLOSS
+    
 # # self.symbols_basket =  ['IYZ','XLY','XHB', 'PEJ','XLP','XLC','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
 #                 'XLK','FDN','XLU','FIW','FAN','XLRE','XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
 # self.etfs_xlc = ['XLC','FIVG','IYZ','VR']
