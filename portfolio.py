@@ -117,12 +117,36 @@ class Portfolio:
         message.geometry("250x250")
         market_open = self.market_open()
         answer = True
+        today = datetime.now()
         sold_symbols = []
         symbols_sell_ratings = get_sell_rating(self)
         if(symbols_sell_ratings != None):
             for symbol in symbols_sell_ratings.items():
                 if(symbol[1]['rank'] >= SELL_RANK):
                     size = self.holdings[symbol[0]]['Quantity']
+                    days_hold = (today - self.holdings[symbol[0]]['Timestamp']).days #TODO: need to check if timestamp is from first buying
+                    selling_price = get_symbol_price(symbol[0])
+                    trade_return = (selling_price - self.holdings[symbol[0]]['AveragePrice'])/self.holdings[symbol[0]]['AveragePrice']*100
+                    if(-1 > trade_return or trade_return > 1): #TODO: need to check by backtesting
+                        if(days_hold < 15):
+                            if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-8))):
+                                sold_symbols.append(symbol[0])
+                                sold = True
+                                # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
+                        elif(symbol[1]['rank'] >= SELL_RANK):
+                            sold_symbols.append(symbol[0])
+                            sold = True
+                            # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
+                    if(not sold):
+                        stoploss_rule = get_stoploss_rule(symbol[1]['rules'])
+                        if(stoploss_rule == NO_STOPLOSS): continue
+                        if('stoploss_rules' not in self.holdings[symbol[0]]):
+                            self.holdings[symbol[0]]['stoploss_rules'] = []
+                        if(stoploss_rule in self.holdings[symbol[0]]['stoploss_rules']): continue
+                        self.holdings[symbol[0]]['stoploss_rules'].append(stoploss_rule)
+                        position_size = sell_rule_to_position_size(stoploss_rule)
+                        sold_symbols.append(symbol[0])
+                        # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
                     if(not automate): answer = messagebox.askyesno('Order Confirmation',f"Selling {size} of {symbol[0]}\nAre You Confirm?")
                     if answer:
                         sold_symbols.append(symbol[0])
@@ -261,8 +285,11 @@ class Portfolio:
                 trade_yield = position["UnrealizedProfitLossPercent"]
                 total_cost = position["TotalCost"]
                 market_value = position["MarketValue"]
+                time_stamp = position["Timestamp"]
+                time_stamp = time_stamp[:10]
+                time_stamp = datetime.strptime(time_stamp,'%Y-%m-%d')
                 holdings[position["Symbol"]] = {"PositionID":position_id,"Quantity":quantity,"LongShort":long_short,
-                    "AveragePrice":average_price,"UnrealizedProfitLossPercent":trade_yield,"TotalCost":total_cost,"MarketValue":market_value}
+                    "AveragePrice":average_price,"UnrealizedProfitLossPercent":trade_yield,"TotalCost":total_cost,"MarketValue":market_value,'Timestamp':time_stamp}
             return holdings
         except Exception:
             print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
@@ -410,8 +437,9 @@ def buy_rate(self,data_monthly,data_weekly,data_day,etf,market_rank):
     data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
     data_monthly['SMA13'] = ta.SMA(data_monthly['Close'],timeperiod=13)
     data_monthly['SMA5'] = ta.SMA(data_monthly['SMA13'], timeperiod=5)
-    data_monthly = data_monthly.dropna()
+    data_day = data_day.dropna()
     data_weekly = data_weekly.dropna()
+    data_monthly = data_monthly.dropna()
     month = today.replace(day=1)
     pre_week = today - timedelta(days=7*4)
     last_month = month - timedelta(days=1) 
@@ -485,8 +513,15 @@ def sell_rate(self,data_monthly,data_weekly,data_day,symbol,market_rank):
     data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
     data_monthly['SMA13'] = ta.SMA(data_monthly['Close'],timeperiod=13)
     data_monthly['SMA5'] = ta.SMA(data_monthly['SMA13'], timeperiod=5)
-    data_monthly = data_monthly.dropna()
+    data_day["ATR"] = ta.ATR(data_day['High'], data_day['Low'], data_day['Close'], timeperiod=14)
+    data_weekly["ATR"] = ta.ATR(data_weekly['High'], data_weekly['Low'], data_weekly['Close'], timeperiod=14)
+    data_monthly["ATR"] = ta.ATR(data_monthly['High'], data_monthly['Low'], data_monthly['Close'], timeperiod=14)
+    data_day['ATRP'] = (data_day['ATR']/data_day['Close'])*100
+    data_weekly['ATRP'] = (data_weekly['ATR']/data_weekly['Close'])*100
+    data_monthly['ATRP'] = (data_monthly['ATR']/data_monthly['Close'])*100
+    data_day = data_day.dropna()
     data_weekly = data_weekly.dropna()
+    data_monthly = data_monthly.dropna()
     first_monthly_date = data_monthly.index[0].date()
     first_weekly_date = data_weekly.index[0].date()
     month = today.replace(day=1)

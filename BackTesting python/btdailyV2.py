@@ -159,22 +159,17 @@ class Backtest(MyBacktestBase):
         rank = 0
         sell_rules = []
         sell_ret = {'rank':rank,'rules': sell_rules}
-        # seq_month, seq_weekly = get_sequence_month_week(symbol,symbol_data_month,symbol_data_weekly,day)
         seq_month  = SequenceMethod(symbol_data_month,'monthly',day)
         seq_weekly =  SequenceMethod(symbol_data_weekly,'weekly',day)
         seq_daily = SequenceMethod(data_day,'day',day)
-        avg_weekly_move = seq_weekly.get_avg_up_return()
-        daily_price = data_day.loc[str(day),'Open']#! was'Cloes need to check it
+        daily_price = data_day.loc[str(day),'Open']
         if(daily_price != None): trade_yield = (daily_price - self.holdings[symbol]['Avg Price'])/self.holdings[symbol]['Avg Price']*100
         else: trade_yield = None
         last_day = day - timedelta(days=5)
         last_day = data_day.truncate(before=last_day, after=day)
         last_day = last_day.tail(2)
         last_day = last_day.head(1)
-        first_monthly_date = symbol_data_month.index[0].date()
-        first_weekly_date = symbol_data_weekly.index[0].date()
         month = day.replace(day=1)
-        pre_week = day - timedelta(days=7*4)
         last_month = month - timedelta(days=1) 
         last_month = last_month.replace(day = 1)
         pre_month = day.replace(day =1)
