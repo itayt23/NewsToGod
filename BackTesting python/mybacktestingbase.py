@@ -131,7 +131,7 @@ class MyBacktestBase(object):
         new_row['Rules'] = buy_rules
         self.trade_log = pd.concat([self.trade_log,pd.DataFrame([new_row])],ignore_index=True)
         # self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        # self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
+        # self.trade_log.to_csv(results_path / f"backtesting_since_2016.csv")
         if self.verbose:
             print(f'{entry_date} | buying {symbol}, {position} units at {entry_price:.2f}')
             self.print_balance(entry_date)
@@ -188,7 +188,7 @@ class MyBacktestBase(object):
             new_row['Win Rate'] = 0
         self.trade_log = pd.concat([self.trade_log,pd.DataFrame([new_row])],ignore_index=True)
         # self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        # self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
+        self.trade_log.to_csv(results_path / f"backtesting_since_2016.csv")
         if self.verbose:
             print(f'{self.today} | selling {symbol}, {position} units at {selling_price:.2f}')
             self.print_balance(self.today)
@@ -214,7 +214,7 @@ class MyBacktestBase(object):
         new_row['Hold Yield'] = self.benchmark_yield
         self.trade_log = pd.concat([self.trade_log,pd.DataFrame([new_row])],ignore_index=True)
         # self.trade_log = self.trade_log.append(new_row, ignore_index=True)
-        self.trade_log.to_csv(results_path / f"seq_strategy_daily.csv")
+        self.trade_log.to_csv(results_path / f"backtesting_since_2016.csv")
         client = storage.Client(project='orbital-expanse-368511')
         bucket = client.get_bucket('backtesting_results')
         bucket.blob('back_testing_since_2016.csv').upload_from_string(self.trade_log.to_csv(),'text/csv')

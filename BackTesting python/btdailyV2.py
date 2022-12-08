@@ -17,6 +17,9 @@ TOTAL_SELL_RANK = 19
 TOTAL_SELL_RANK_NO_SL = 10
 TIME_OUT = 59
 NO_STOPLOSS = 0
+MINIMUN_SELL = 1
+MINIMUN_MINUS_SELL = -2
+
 
 class Backtest(MyBacktestBase):
 
@@ -27,13 +30,15 @@ class Backtest(MyBacktestBase):
         trading_days = symbols_daily_df['XLK']
         trading_days = trading_days.index.to_list()
         strat_index = 278
+        print(self.start.date())
         for i in range(len(trading_days)):
             trading_days[i] = trading_days[i].date()
             if(self.start.date() == trading_days[i]): strat_index = i
         trading_days = trading_days[strat_index:] #Start of 2019 was 286
         for day in trading_days:
-            # time_passed = (time.time() - start_time)/60
-            # if(time_passed >= TIME_OUT):break
+            time_passed = (time.time() - start_time)/60
+            if(time_passed >= TIME_OUT):
+                break
             position_size = 1
             self.today = day
             sold_now = []
@@ -41,21 +46,25 @@ class Backtest(MyBacktestBase):
             if(symbols_sell_ratings != None):
                 for symbol in symbols_sell_ratings.items():
                     position_size = 1
+                    sold = False
                     selling_date = day
-                    selling_price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
                     entry_date = self.holdings[symbol[0]]['Entry Date']
+                    selling_price = symbols_daily_df[symbol[0]].loc[str(day),'Open']
                     if(type(entry_date) is list): days_hold = (selling_date - entry_date[0]).days
                     else: days_hold = (selling_date - entry_date).days
+                    trade_return = (selling_price - self.holdings[symbol[0]]['Avg Price'])/self.holdings[symbol[0]]['Avg Price']*100
                     if(symbol[1]['rank'] >= SELL_RANK):
-                        trade_return = (selling_price - self.holdings[symbol[0]]['Avg Price'])/self.holdings[symbol[0]]['Avg Price']*100
-                        if(days_hold < 15):
-                            if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-8))):
+                        if(MINIMUN_MINUS_SELL > trade_return or trade_return > MINIMUN_SELL):
+                            if(days_hold < 15):
+                                if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-8))):
+                                    sold_now.append(symbol[0])
+                                    sold = True
+                                    self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
+                            elif(symbol[1]['rank'] >= SELL_RANK):
                                 sold_now.append(symbol[0])
+                                sold = True
                                 self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                        elif(symbol[1]['rank'] >= SELL_RANK):
-                            sold_now.append(symbol[0])
-                            self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                    else:
+                    if(not sold and (MINIMUN_MINUS_SELL > trade_return or trade_return > MINIMUN_SELL)):
                         stoploss_rule = get_stoploss_rule(symbol[1]['rules'])
                         if(stoploss_rule == NO_STOPLOSS): continue
                         if('stoploss_rules' not in self.holdings[symbol[0]]):
@@ -85,31 +94,26 @@ class Backtest(MyBacktestBase):
         seq_month  = SequenceMethod(symbol_data_month,'monthly',day)
         seq_weekly =  SequenceMethod(symbol_data_weekly,'weekly',day)
         seq_daily = SequenceMethod(data_day,'day',day)
-        avg_weekly_move = seq_weekly.get_avg_up_return()
-        last_day = day - timedelta(days=5)
-        last_day = data_day.truncate(before=last_day, after=day)
-        last_day = last_day.tail(2)
+        last_6_days = day - timedelta(days=15)
+        last_6_days = data_day.truncate(before=last_6_days, after=day)
+        if(last_6_days.shape[0] >=6 ): last_6_days = last_6_days.tail(last_6_days.shape[0] - (last_6_days.shape[0] - 6)) 
+        last_day = last_6_days.tail(2)
         last_day = last_day.head(1)
-        start_move_price = check_seq_price_by_date_weekly(seq_weekly.get_seq_df(),day)
-        try:
-            daily_price = data_day.loc[str(day),'Open']
-            last_seq_date = seq_daily.get_seq_df()['Date'].iloc[-1]
-        except:
-            buy_ret['rank'] = 0
-            buy_ret['rules'] = buy_rules
-            return buy_ret
-        if(daily_price != None and start_move_price != None): move_return = (daily_price - start_move_price)/start_move_price*100
-        else: move_return = None
-        first_monthly_date = symbol_data_month.index[0].date()
-        first_weekly_date = symbol_data_weekly.index[0].date()
         month = day.replace(day=1)
         pre_week = day - timedelta(days=7*4)
         last_month = month - timedelta(days=1) 
         last_month = last_month.replace(day = 1)
         pre_3_month = day.replace(day =1)
+        try:
+            last_seq_date = seq_daily.get_seq_df()['Date'].iloc[-1]
+        except:
+            buy_ret['rank'] = 0
+            buy_ret['rules'] = buy_rules
+            return buy_ret
         for i in range(3):
             pre_3_month = pre_3_month - timedelta(days=1)
             pre_3_month = pre_3_month.replace(day = 1)
+        # last_seq_date = seq_daily.get_seq_df()['Date'].iloc[-1]
         ##################START BUY RULES#######################
         if(float(data_day.loc[str(last_day.index[-1]),'Close']) > float(data_day.loc[str(last_day.index[-1]),'SMA13']) and check_seq_by_date_daily(seq_daily.get_seq_df(),day) == 1
                 and (last_day.index[-1].date() - last_seq_date).days == 0):
@@ -130,7 +134,7 @@ class Backtest(MyBacktestBase):
             buy_ret['rules'] = buy_rules
             return buy_ret
         try:
-            if(data_day.loc[str(day),'SMA13'] > data_day.loc[str(day),'SMA5'] and data_day.loc[str(day+ timedelta(days=1)),'SMA13'] > data_day.loc[str(day+ timedelta(days=1)),'SMA5']):
+            if(data_day.loc[str(last_day.index[-1]),'SMA13'] > data_day.loc[str(last_day.index[-1]),'SMA5'] and data_day.loc[str(last_6_days.head(3).tail(1).index[-1]),'SMA13'] > data_day.loc[str(last_6_days.head(3).tail(1).index[-1]),'SMA5']):
                 rank += 1
                 buy_rules.append('5')
         except:
@@ -147,14 +151,11 @@ class Backtest(MyBacktestBase):
         if(is_moving_away_monthly(symbol_data_month,last_month,pre_3_month)):
             rank += 1
             buy_rules.append('8')
-        # if(move_return != None and move_return <= avg_weekly_move/2): #was 2.5
-        #     rank += 1
-        #     buy_rules.append('9')
         buy_ret['rank'] = rank
         buy_ret['rules'] = buy_rules
         return buy_ret
 
-    def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,day): #TODO:fix comments
+    def sell_rate(self,symbol_data_month,symbol_data_weekly,data_day,symbol,day):
         global symbols_daily_df,symbols_weekly_df,symbols_monthly_df
         rank = 0
         sell_rules = []
@@ -172,10 +173,6 @@ class Backtest(MyBacktestBase):
         month = day.replace(day=1)
         last_month = month - timedelta(days=1) 
         last_month = last_month.replace(day = 1)
-        pre_month = day.replace(day =1)
-        for i in range(3):
-            pre_month = pre_month - timedelta(days=1)
-            pre_month = pre_month.replace(day = 1) #!Check if its ok
         ################START OF RULES##################################
         if(float(last_day.loc[str(last_day.index[-1]),'Close']) < float(data_day.loc[str(last_day.index[-1]),'SMA5']) and check_seq_by_date_daily(seq_daily.get_seq_df(),day) == -1):
             rank += 5
@@ -185,27 +182,20 @@ class Backtest(MyBacktestBase):
             sell_rules.append("3")
             if(check_seq_by_date_weekly_previous(seq_weekly.get_seq_df()) == -1):
                 rank += 1
-            sell_rules.append("3a")
+                sell_rules.append("3a")
         if(check_seq_by_date_monthly(seq_month.get_seq_df(),day) == -1):
             rank += 2
             sell_rules.append('4')
-        try:
-            if(symbol_data_month.loc[str(last_month),'SMA13'] < symbol_data_month.loc[str(last_month),'SMA5']):#!check what is last month
-                rank += 1
-                sell_rules.append('5')
-        except:
-            rank += 0
-        if(float(symbols_daily_df[symbol].loc[str(day),'ATRP'])*6 <= trade_yield):
-            # rank += SELL_RANK_HARD
+        if(symbol_data_month.loc[str(last_month),'SMA13'] < symbol_data_month.loc[str(last_month),'SMA5']):
+            rank += 1
+            sell_rules.append('5')
+        if(float(symbols_daily_df[symbol].loc[str(day),'ATRP'])*7 <= trade_yield):
             sell_rules.append('6')
         elif(float(symbols_daily_df[symbol].loc[str(day),'ATRP'])*5 <= trade_yield):
-            # rank += SELL_RANK_HARD
             sell_rules.append('7')
         elif(float(symbols_daily_df[symbol].loc[str(day),'ATRP'])*4 <= trade_yield):
-            # rank += SELL_RANK_HARD
             sell_rules.append('8')
         elif(float(symbols_daily_df[symbol].loc[str(day),'ATRP'])*3 <= trade_yield):
-            # rank += SELL_RANK_HARD
             sell_rules.append('9')
            
         sell_ret['rank'] = rank
@@ -246,7 +236,7 @@ def get_sell_ratings(self,day):
 
 def is_moving_away_weekly(data_weekly,today,pre_week):
     try:
-        if(data_weekly.loc[str(today),'SMA13'] > data_weekly.loc[str(today),'SMA5']):
+        if(data_weekly.loc[str(today),'SMA13'] > data_weekly.loc[str(today),'SMA5'] and data_weekly.loc[str(pre_week),'SMA13'] > data_weekly.loc[str(pre_week),'SMA5']):
             if((data_weekly.loc[str(today),'SMA13'] - data_weekly.loc[str(today),'SMA5']) > (data_weekly.loc[str(pre_week),'SMA13'] - data_weekly.loc[str(pre_week),'SMA5'])):
                 return True
     except:
@@ -255,7 +245,7 @@ def is_moving_away_weekly(data_weekly,today,pre_week):
 
 def is_moving_away_monthly(data_monthly,last_month,pre_month):
     try:
-        if(data_monthly.loc[str(last_month),'SMA13'] > data_monthly.loc[str(last_month),'SMA5']):
+        if(data_monthly.loc[str(last_month),'SMA13'] > data_monthly.loc[str(last_month),'SMA5'] and data_monthly.loc[str(pre_month),'SMA13'] > data_monthly.loc[str(pre_month),'SMA5']):
             if((data_monthly.loc[str(last_month),'SMA13'] - data_monthly.loc[str(last_month),'SMA5']) > (data_monthly.loc[str(pre_month),'SMA13'] - data_monthly.loc[str(pre_month),'SMA5'])):
                 return True
     except:
@@ -362,10 +352,7 @@ def get_stoploss_rule(rules):
     if('8' in rules): return '8'
     if('9' in rules): return '9'
     return NO_STOPLOSS
-
-#AVG RETURN SICE 02/01/2015 - 152.59% !really?
-#AVG RETURN SICE 04/01/2016 - 91.0834%
-#AVG RETURN SICE 02/01/2019 - 34.645%
+    
 symbols = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL','DVY','DXJ','GLD','SMH','TLT',
             'XBI','EEM','XHB','XRT','XLY','VGK','XOP','VGT','FDN','HACK','SKYY','KRE','XLF','XLB']
 symbols_daily_df= {}
@@ -382,6 +369,9 @@ for symbol in symbols:
     symbols_weekly_df[symbol]['SMA5'] = symbols_weekly_df[symbol]['SMA13'].rolling(window=5).mean()
     symbols_monthly_df[symbol]['SMA13'] = symbols_monthly_df[symbol]['Close'].rolling(window=13).mean()
     symbols_monthly_df[symbol]['SMA5'] = symbols_monthly_df[symbol]['SMA13'].rolling(window=5).mean()
+    # symbols_daily_df[symbol]["ATR"] = ta.ATR(symbols_daily_df[symbol]['High'], symbols_daily_df[symbol]['Low'], symbols_daily_df[symbol]['Close'], timeperiod=14)
+    # symbols_weekly_df[symbol]["ATR"] = ta.ATR(symbols_weekly_df[symbol]['High'], symbols_weekly_df[symbol]['Low'], symbols_weekly_df[symbol]['Close'], timeperiod=14)
+    # symbols_monthly_df[symbol]["ATR"] = ta.ATR(symbols_monthly_df[symbol]['High'], symbols_monthly_df[symbol]['Low'], symbols_monthly_df[symbol]['Close'], timeperiod=14)
     atr_calculate(symbols_daily_df[symbol])
     atr_calculate(symbols_weekly_df[symbol])
     atr_calculate(symbols_monthly_df[symbol])
@@ -392,7 +382,7 @@ for symbol in symbols:
     symbols_weekly_df[symbol].dropna()
 
 if __name__ == '__main__':
-    # try:
+    try:
         symbols_daily_df,symbols_weekly_df,symbols_monthly_df
         results_path = Path.cwd() / 'Results' / 'BackTesting' / 'Strategy'
         if not results_path.exists():
@@ -402,11 +392,11 @@ if __name__ == '__main__':
         portfolio = Backtest(start=start_date,end=end_date,amount=1000000,symbols_daily_df=symbols_daily_df,
                                 symbols_weekly_df=symbols_weekly_df,symbols_monthly_df=symbols_monthly_df,ptc=0.005)
         portfolio.run_seq_strategy()
-    # except Exception as err:
-    #     template = "An exception occured:\n{0} of type {1} occurred. Arguments:\n{2!r}"
-    #     message = template.format(str(err),type(err).__name__, err.args)
-    #     print(json.dumps({"message": message, "severity": "ERROR"}))
-    #     exit(1)
+    except Exception as err:
+        template = "An exception occured:\n{0} of type {1} occurred. Arguments:\n{2!r}"
+        message = template.format(str(err),type(err).__name__, err.args)
+        print(json.dumps({"message": message, "severity": "ERROR"}))
+        exit(1)
             
 
     
