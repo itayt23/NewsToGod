@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import messagebox
 import gcsfs
 from google.cloud import storage
+from google.cloud import logging
 
 
 ACCOUNT_ID = 11509188
@@ -28,7 +29,31 @@ STORAGE_BUCKET_NAME = 'backtesting_results'
 PROJECT_NAME = 'orbital-expanse-368511'
 
 
-# bucket.blob('back_testing_original2.csv').upload_from_string(self.trade_log.to_csv(),'text/csv')
+
+class LogHandler:
+  def __init__(self):
+    self.log_client = logging.Client()
+
+  def error(self, message):
+    log_name = "errors"
+    logger = self.log_client.logger(log_name)
+    logger.log_text(message, severity="ERROR")
+
+  def warning(self, message):
+    log_name = "warnings"
+    logger = self.log_client.logger(log_name)
+    logger.log_text(message, severity="WARNING")
+
+  def info(self, message):
+    log_name = "info"
+    logger = self.log_client.logger(log_name)
+    logger.log_text(message, severity="INFO")
+
+########IMPLIMATION EXAMPLE##########
+# logger = LogHandler()
+# logger.error("This is an error message.")
+# logger.warning("This is a warning message.")
+# logger.info("This is an info message.")
 
 class Portfolio:
 
