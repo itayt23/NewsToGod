@@ -36,9 +36,9 @@ class Backtest(MyBacktestBase):
             if(self.start.date() == trading_days[i]): strat_index = i
         trading_days = trading_days[strat_index:] #Start of 2019 was 286
         for day in trading_days:
-            time_passed = (time.time() - start_time)/60
-            if(time_passed >= TIME_OUT):
-                break
+            # time_passed = (time.time() - start_time)/60
+            # if(time_passed >= TIME_OUT):
+            #     break
             position_size = 1
             self.today = day
             sold_now = []
