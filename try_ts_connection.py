@@ -1,11 +1,9 @@
-from dotenv import load_dotenv
-
 import ts
 
 
 if __name__ == '__main__':
 
-    sesh = ts.open_session(live = True)
+    sesh = ts.open_session(live = False)
 
     print(ts.get_bars(sesh, 'MSFT'))
     print(ts.get_balances(sesh))
