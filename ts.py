@@ -133,7 +133,7 @@ def get_auth_auto():
     
     # Login automatically
     executable_path = {'executable_path': ChromeDriverManager().install()}
-    browser = Browser('chrome', **executable_path, headless=True)
+    browser = Browser('chrome', **executable_path, headless=False)
 
     browser.visit(make_auth_url())
 
@@ -142,13 +142,21 @@ def get_auth_auto():
 
     button = browser.find_by_id('btn-login')
     button.click()
-    
-    code_field = browser.find_by_id('code')
-    print('Please enter your one-time password.')
-    code_field.fill(input('OTP: '))
-    
-    button = browser.find_by_name('action')
-    button.click()
+    #wait_time=10
+    if(browser.is_element_present_by_text('Verify Your Identity') or browser.is_element_present_by_text('Remember this device for 30 days')):
+        try:
+            #Remember this device for 30 days
+            elements = browser.find_by_xpath("/html/body/div/main/section/div/div/div/form/div[2]/label/span")
+            elements.first.click()
+        except:
+            print("does not succeed clicking on 'Remember this device for 30 days' checkbox")
+
+        code_field = browser.find_by_id('code')
+        print('Please enter your one-time password.')
+        code_field.fill(input('OTP: '))
+        
+        button = browser.find_by_name('action')
+        button.click()
 
     # After logging in, extract the url and the parts from it
     browser_url = browser.url
@@ -192,9 +200,14 @@ def get_access_token(auth_code):
 # NOTE: WORKING
 
 def open_session(mode='auto',live = False):
-    global API_URL
+    global API_URL,TRADESTATION_ACCOUNT
     session_info = None
-    if(live): API_URL = LIVE_TRADING
+    if(live):
+        API_URL = LIVE_TRADING
+        TRADESTATION_ACCOUNT = os.getenv('TRADESTATION_ACCOUNT')
+    else:
+        API_URL = LIVE_TRADING
+        TRADESTATION_ACCOUNT = os.getenv('TRADESTATION_SIM_ACCOUNT')
     
     if mode.lower() == 'auto':
         auth_code = get_auth_auto()
