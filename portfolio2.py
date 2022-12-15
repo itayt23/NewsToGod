@@ -58,6 +58,7 @@ PROJECT_NAME = 'orbital-expanse-368511'
 # logger.info("This is an info message.")
 
 #TODO: need to update csv and position size in buy and sell functions 
+#TODO: need to change every return 
 
 class Portfolio:
 
@@ -86,8 +87,6 @@ class Portfolio:
         return self.starting_amount
         
     def run_buy_and_sell_strategy(self,automate):
-        message =  tk.Tk()
-        message.geometry("250x250")
         market_open = self.market_open()
         answer = True
         today = datetime.now()
@@ -124,6 +123,7 @@ class Portfolio:
                     all_sell_rules.append(stoploss_rule)
                     position_size = sell_rule_to_position_size(stoploss_rule)
                     sold_symbols.append(symbol[0])
+
                     # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
                     self.update_orders()
                     self.update_portfolio()
@@ -135,18 +135,14 @@ class Portfolio:
             for symbol in symbols_buy_ratings.items():
                 if((symbol[1]['rank'] >= BUY_RANK) and (not self.is_holding(symbol[0])) and (self.cash - self.queue_buying_money + self.queue_selling_money >= self.trade_size_cash - self.leverage_amount) and (symbol[0] not in sold_symbols)):
                     size = int(self.trade_size_cash / float(symbol[1]['price']))
-                    answer = messagebox.askyesno('Order Confirmation',f"Buying {size} of {symbol[0]}\nAre You Confirm?")
                     if answer:
                         if(self.buy(symbol[0], size) != SUCCESS):
-                            message.destroy()
                             return
                         if(market_open):
                             if(self.wait_for_confirm_buy_order(symbol[0], size) != SUCCESS):
-                                message.destroy()
                                 return
                         self.update_orders()
                         self.update_portfolio()
-        message.destroy()
 
     def wait_for_confirm_buy_order(self, symbol, size): #TODO: I can do it also with order info - Filled 
         finish_buy = False
