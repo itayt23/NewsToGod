@@ -57,6 +57,8 @@ PROJECT_NAME = 'orbital-expanse-368511'
 # logger.warning("This is a warning message.")
 # logger.info("This is an info message.")
 
+#TODO: need to update csv and position size in buy and sell functions 
+
 class Portfolio:
 
     def __init__(self,trade_station,market_sentiment,sectors_sentiment):
@@ -113,25 +115,18 @@ class Portfolio:
                 if(not sold and (MINIMUN_MINUS_SELL > trade_return or trade_return > MINIMUN_SELL)):
                     stoploss_rule = get_stoploss_rule(symbol[1]['rules'])
                     if(stoploss_rule == NO_STOPLOSS): continue
-                    if(symbol[0] not in orders_history_df.index):
-                        pass #TODO: need to add the rules to this symbol maybe do a function for adding all data
-                    past_sell_rules = self.orders_history_df.loc[symbol[0],"Sell Rules"]
-                    if(not pd.isna(past_sell_rules)): pass
-                    if(stoploss_rule not in past_sell_rules):
-                        self.holdings[symbol[0]]['stoploss_rules'] = []
-                    if(stoploss_rule in past_sell_rules): continue
-                    self.holdings[symbol[0]]['stoploss_rules'].append(stoploss_rule)
+                    if(symbol[0] in self.orders_history_df.index): #?its mean first time selling this ticker
+                        past_sell_rules = self.orders_history_df.loc[symbol[0],"Sell Rules"]
+                        if(not pd.isna(past_sell_rules)): 
+                            if(stoploss_rule in past_sell_rules): continue
+                    all_sell_rules = []
+                    all_sell_rules.append(self.orders_history_df[symbol[0],'Sell Rules'])
+                    all_sell_rules.append(stoploss_rule)
                     position_size = sell_rule_to_position_size(stoploss_rule)
                     sold_symbols.append(symbol[0])
                     # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                    if(not automate): answer = messagebox.askyesno('Order Confirmation',f"Selling {size} of {symbol[0]}\nAre You Confirm?")
-                    if answer:
-                        sold_symbols.append(symbol[0])
-                        if(self.sell(symbol[0],size) != SUCCESS):
-                            message.destroy()
-                            return
-                        self.update_orders()
-                        self.update_portfolio()
+                    self.update_orders()
+                    self.update_portfolio()
             if(market_open and self.queue_orders): self.wait_for_confirm_sell_order() #TODO: need to fix sell symbol, close app- enter and still wanna tobuy problem
         
         if(self.cash - self.queue_buying_money + self.queue_selling_money >= self.trade_size_cash - self.leverage_amount):
@@ -282,7 +277,7 @@ class Portfolio:
             message = "Could Not Reading Orders History csv file, please check why "
             print(json.dumps({"message": message, "severity": "WARNING"}))
             # exit(1)#TODO: need to keep the while loop running! 0_0 
-            orders_history_df = pd.DataFrame(columns=['Dates','Ticker','Position','Buy Rules','Sell Rules'])
+            orders_history_df = pd.DataFrame(columns=['Dates','Ticker','Position Size','Buy Rules','Sell Rules'])
             orders_history_df = orders_history_df.set_index('Ticker')
             bucket.blob(ORDERS_HISTORY_FILE).upload_from_string(orders_history_df,'text/csv')
             print(json.dumps({"message": "Uploaded Empty Dataframe file", "severity": "INFO"}))
@@ -344,6 +339,9 @@ class Portfolio:
         for order in self.queue_orders.items():
             if(order[0] == symbol): return True
         return False
+
+    def update_orders_df(self,ticker,dates,position_size=None,buy_rules=None,sell_rules=None):
+        self.orders_history_df[ticker] =  {"Dates":dates,"Position Size":position_size,"Buy Rules": buy_rules,"Sell Rules": sell_rules}
 
 
     def buy(self,symbol,quantity,order_type='Market'):
@@ -696,6 +694,9 @@ def get_stoploss_rule(rules):
     if('8' in rules): return '8'
     if('9' in rules): return '9'
     return NO_STOPLOSS
+
+
+# columns=['Dates','Ticker','Position','Buy Rules','Sell Rules'])
     
 # # self.symbols_basket =  ['IYZ','XLY','XHB', 'PEJ','XLP','XLC','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
 #                 'XLK','FDN','XLU','FIW','FAN','XLRE','XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
@@ -713,23 +714,27 @@ def get_stoploss_rule(rules):
 
 
 today = datetime.now()
-orders_history_df = pd.DataFrame(columns=['Dates','Buy\Sell','Ticker','Position','Buy\Sell Price','Buy Rules','Sell Rules'])
+orders_history_df = pd.DataFrame(columns=['Dates','Buy\Sell','Ticker','Position Size','Buy\Sell Price','Buy Rules','Sell Rules'])
 orders_history_df = orders_history_df.set_index('Ticker')
 dates= []
 dates.append(today)
-new_row= {"Dates":dates,"Position":220}
+new_row= {"Dates":dates,"Position Size":220}
 orders_history_df.loc['AAPL'] = new_row
-new_row2= {"Dates":dates,"Position":5}
+new_row2= {"Dates":dates,"Position Size":None}
 orders_history_df.loc['TSLA'] = new_row2
 dates_buy = orders_history_df.loc["TSLA",'Dates']
 diff = (today-dates_buy[0]).days
-ck1 = orders_history_df.loc['TSLA','Sell Rules']
-if('MSA' in orders_history_df.index):
-    ck2 = orders_history_df.loc['MSA','Sell Rules']
-if(not pd.isna(ck1)):
-    print(ck1)
-print(ck2)
-print('BLA')
+print(orders_history_df)
+# orders_history_df.loc['TSLA'] = new_row
+print(pd.isna(orders_history_df.loc['TSLA','Position Size']))
+
+# ck1 = orders_history_df.loc['TSLA','Sell Rules']
+# if('MSA' in orders_history_df.index):
+#     ck2 = orders_history_df.loc['MSA','Sell Rules']
+# if(not pd.isna(ck1)):
+#     print(ck1)
+# print(ck2)
+# print('BLA')
 
 
   # days_hold = (today - self.holdings[symbol[0]]['Timestamp']).days #TODO: need to check if timestamp is from first buying
