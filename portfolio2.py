@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import messagebox
 import gcsfs
 from google.cloud import storage
-from google.cloud import logging
+# from google.cloud import logging
 
 
 ACCOUNT_ID = 11509188
@@ -17,6 +17,8 @@ STARTING_AMOUNT = 1000000
 BUY_RANK = 6
 SELL_RANK = 5
 SELL_RANK_HARD = 9
+MINIMUN_SELL = 1
+MINIMUN_MINUS_SELL = -2
 TRADE_SIZE = 0.25
 LEVERAGE_SIZE = 0.01
 SUCCESS = 1
@@ -30,24 +32,24 @@ PROJECT_NAME = 'orbital-expanse-368511'
 
 
 
-class LogHandler:
-  def __init__(self):
-    self.log_client = logging.Client()
+# class LogHandler:
+#   def __init__(self):
+#     self.log_client = logging.Client()
 
-  def error(self, message):
-    log_name = "errors"
-    logger = self.log_client.logger(log_name)
-    logger.log_text(message, severity="ERROR")
+#   def error(self, message):
+#     log_name = "errors"
+#     logger = self.log_client.logger(log_name)
+#     logger.log_text(message, severity="ERROR")
 
-  def warning(self, message):
-    log_name = "warnings"
-    logger = self.log_client.logger(log_name)
-    logger.log_text(message, severity="WARNING")
+#   def warning(self, message):
+#     log_name = "warnings"
+#     logger = self.log_client.logger(log_name)
+#     logger.log_text(message, severity="WARNING")
 
-  def info(self, message):
-    log_name = "info"
-    logger = self.log_client.logger(log_name)
-    logger.log_text(message, severity="INFO")
+#   def info(self, message):
+#     log_name = "info"
+#     logger = self.log_client.logger(log_name)
+#     logger.log_text(message, severity="INFO")
 
 ########IMPLIMATION EXAMPLE##########
 # logger = LogHandler()
@@ -64,7 +66,7 @@ class Portfolio:
         self.equity = self.get_equity()
         self.net_wealth = self.cash + self.equity
         self.holdings = self.get_holdings()
-        self.orders_history = self.get_orders_history()
+        self.orders_history_df = self.get_orders_history()
         self.trade_size_cash = TRADE_SIZE * self.net_wealth
         self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
         self.queue_buying_money = 0
@@ -91,12 +93,14 @@ class Portfolio:
         symbols_sell_ratings = get_sell_rating(self)
         if(symbols_sell_ratings != None):
             for symbol in symbols_sell_ratings.items():
+                position_size = 1
+                sold = False
+                days_hold = get_days_hold(symbol[0],today,self.orders_history_df)
+                selling_price = get_symbol_price(symbol[0])
+                trade_return = (selling_price - self.holdings[symbol[0]]['AveragePrice'])/self.holdings[symbol[0]]['AveragePrice']*100
+                size = self.holdings[symbol[0]]['Quantity']
                 if(symbol[1]['rank'] >= SELL_RANK):
-                    size = self.holdings[symbol[0]]['Quantity']
-                    days_hold = (today - self.holdings[symbol[0]]['Timestamp']).days #TODO: need to check if timestamp is from first buying
-                    selling_price = get_symbol_price(symbol[0])
-                    trade_return = (selling_price - self.holdings[symbol[0]]['AveragePrice'])/self.holdings[symbol[0]]['AveragePrice']*100
-                    if(-1 > trade_return or trade_return > 1): #TODO: need to check by backtesting
+                    if(MINIMUN_MINUS_SELL > trade_return or trade_return > MINIMUN_SELL):
                         if(days_hold < 15):
                             if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-8))):
                                 sold_symbols.append(symbol[0])
@@ -106,16 +110,20 @@ class Portfolio:
                             sold_symbols.append(symbol[0])
                             sold = True
                             # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                    if(not sold):
-                        stoploss_rule = get_stoploss_rule(symbol[1]['rules'])
-                        if(stoploss_rule == NO_STOPLOSS): continue
-                        if('stoploss_rules' not in self.holdings[symbol[0]]):
-                            self.holdings[symbol[0]]['stoploss_rules'] = []
-                        if(stoploss_rule in self.holdings[symbol[0]]['stoploss_rules']): continue
-                        self.holdings[symbol[0]]['stoploss_rules'].append(stoploss_rule)
-                        position_size = sell_rule_to_position_size(stoploss_rule)
-                        sold_symbols.append(symbol[0])
-                        # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
+                if(not sold and (MINIMUN_MINUS_SELL > trade_return or trade_return > MINIMUN_SELL)):
+                    stoploss_rule = get_stoploss_rule(symbol[1]['rules'])
+                    if(stoploss_rule == NO_STOPLOSS): continue
+                    if(symbol[0] not in orders_history_df.index):
+                        pass #TODO: need to add the rules to this symbol maybe do a function for adding all data
+                    past_sell_rules = self.orders_history_df.loc[symbol[0],"Sell Rules"]
+                    if(not pd.isna(past_sell_rules)): pass
+                    if(stoploss_rule not in past_sell_rules):
+                        self.holdings[symbol[0]]['stoploss_rules'] = []
+                    if(stoploss_rule in past_sell_rules): continue
+                    self.holdings[symbol[0]]['stoploss_rules'].append(stoploss_rule)
+                    position_size = sell_rule_to_position_size(stoploss_rule)
+                    sold_symbols.append(symbol[0])
+                    # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
                     if(not automate): answer = messagebox.askyesno('Order Confirmation',f"Selling {size} of {symbol[0]}\nAre You Confirm?")
                     if answer:
                         sold_symbols.append(symbol[0])
@@ -274,9 +282,11 @@ class Portfolio:
             message = "Could Not Reading Orders History csv file, please check why "
             print(json.dumps({"message": message, "severity": "WARNING"}))
             # exit(1)#TODO: need to keep the while loop running! 0_0 
-            orders_history_df = pd.DataFrame(columns=['Date','Buy\Sell','Ticker','Position','Buy\Sell Price','Buy Rules','Sell Rules'])
+            orders_history_df = pd.DataFrame(columns=['Dates','Ticker','Position','Buy Rules','Sell Rules'])
+            orders_history_df = orders_history_df.set_index('Ticker')
             bucket.blob(ORDERS_HISTORY_FILE).upload_from_string(orders_history_df,'text/csv')
             print(json.dumps({"message": "Uploaded Empty Dataframe file", "severity": "INFO"}))
+            return orders_history_df
 
     def get_orders(self):
         url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/orders"
@@ -588,7 +598,10 @@ def is_moving_away_monthly(data_monthly,last_month,pre_month):
         return False
     return False
 
-
+def get_days_hold(symbol,today,orders_history):
+    dates_buy = orders_history.loc[symbol[0],'Dates']
+    days_hold = (today - dates_buy[0]).days
+    return days_hold
 
 def check_seq_by_date_monthly(seq,date):
     previous_row = 0
@@ -697,3 +710,26 @@ def get_stoploss_rule(rules):
 # self.etfs_xlu = ['XLU','RNRG','FIW','FAN']
 # self.etfs_xlre = ['XLRE','KBWY','SRVR','VPN','GRNR'] #VPN, GRNR
 # self.etfs_xlb = ['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
+
+
+today = datetime.now()
+orders_history_df = pd.DataFrame(columns=['Dates','Buy\Sell','Ticker','Position','Buy\Sell Price','Buy Rules','Sell Rules'])
+orders_history_df = orders_history_df.set_index('Ticker')
+dates= []
+dates.append(today)
+new_row= {"Dates":dates,"Position":220}
+orders_history_df.loc['AAPL'] = new_row
+new_row2= {"Dates":dates,"Position":5}
+orders_history_df.loc['TSLA'] = new_row2
+dates_buy = orders_history_df.loc["TSLA",'Dates']
+diff = (today-dates_buy[0]).days
+ck1 = orders_history_df.loc['TSLA','Sell Rules']
+if('MSA' in orders_history_df.index):
+    ck2 = orders_history_df.loc['MSA','Sell Rules']
+if(not pd.isna(ck1)):
+    print(ck1)
+print(ck2)
+print('BLA')
+
+
+  # days_hold = (today - self.holdings[symbol[0]]['Timestamp']).days #TODO: need to check if timestamp is from first buying
