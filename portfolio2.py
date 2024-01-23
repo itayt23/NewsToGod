@@ -1,15 +1,16 @@
 import yahoo_fin.stock_info as yf2
 from sequencing import *
-import talib as ta
+from myexceptions import *
 import requests
 import json
 import traceback
 import time
-import tkinter as tk
-from tkinter import messagebox
-import gcsfs
+import tradestationapi as ts
+import sys
+import os
+import numpy as np
+# import gcsfs
 from google.cloud import storage
-# from google.cloud import logging
 
 
 ACCOUNT_ID = 11509188
@@ -21,146 +22,172 @@ MINIMUN_SELL = 1
 MINIMUN_MINUS_SELL = -2
 TRADE_SIZE = 0.25
 LEVERAGE_SIZE = 0.01
-SUCCESS = 1
 FAILED_ORDER = -1
-FAIL = 0
+FAIL = -1
+SUCCESS = 1
+ERROR = -1
 ERROR_ORDER = -1
+NOT_EXIST = -1
 NO_STOPLOSS = 0
+MINIMUN_ENTER_POSITION_SIZE = 0.5
+MINIMUN_SELL_POSITION_SIZE = 0.2
+MAXIMUM_POSITION_SIZE = 0.75
 ORDERS_HISTORY_FILE = 'orders_history.csv'
+ORDERS_HISTORY_FILE = 'orders_history_backup.csv'
 STORAGE_BUCKET_NAME = 'backtesting_results'
 PROJECT_NAME = 'orbital-expanse-368511'
 
 
 
-# class LogHandler:
-#   def __init__(self):
-#     self.log_client = logging.Client()
 
-#   def error(self, message):
-#     log_name = "errors"
-#     logger = self.log_client.logger(log_name)
-#     logger.log_text(message, severity="ERROR")
+#TODO: need to initialite first empty csv backup if system is falling down! 
+#TODO: need to look if this function is good - check_seq_by_date_daily_equal
+#TODO: need to fix problem that uploading the same csv file name is not updating the file
 
-#   def warning(self, message):
-#     log_name = "warnings"
-#     logger = self.log_client.logger(log_name)
-#     logger.log_text(message, severity="WARNING")
-
-#   def info(self, message):
-#     log_name = "info"
-#     logger = self.log_client.logger(log_name)
-#     logger.log_text(message, severity="INFO")
-
-########IMPLIMATION EXAMPLE##########
-# logger = LogHandler()
-# logger.error("This is an error message.")
-# logger.warning("This is a warning message.")
-# logger.info("This is an info message.")
-
-#TODO: need to update csv and position size in buy and sell functions 
-#TODO: need to change every return 
 
 class Portfolio:
 
-    def __init__(self,trade_station,market_sentiment,sectors_sentiment):
-        self.trade_station = trade_station
+    def __init__(self,trade_station):
+        self.ts_session = trade_station
         self.cash = self.get_cash()
         self.starting_amount = STARTING_AMOUNT
         self.equity = self.get_equity()
         self.net_wealth = self.cash + self.equity
         self.holdings = self.get_holdings()
-        self.orders_history_df = self.get_orders_history()
+        self.orders_history_df = pd.DataFrame(columns=['Ticker','Position Left','Stoploss Rules','Dates'])
+        self.orders_history_df = self.orders_history_df.set_index('Ticker')
+        # self.orders_history_df.loc['AAPL'] = {'Position Left':20}
+        self.upload_df_to_gcloud()
         self.trade_size_cash = TRADE_SIZE * self.net_wealth
         self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
         self.queue_buying_money = 0
         self.queue_selling_money = 0
         self.orders = {}
         self.queue_orders = {}
+        self.sold_symbols = []
         self.filled_orders = {}
-        self.market_sentiment = market_sentiment
-        self.sectors_sentiment = sectors_sentiment
         self.etfs_to_buy = ['XLK','XLV','XLE','XLC','XLRE','XLU','SPY','QQQ','DIA','NOBL','DVY','DXJ','GLD','SMH',
                     'TLT','XBI','EEM','XHB','XRT','XLY','VGK','XOP','VGT','FDN','HACK','SKYY','KRE','XLF','XLB']
-        self.update_orders()
     
     def get_start_amount(self):
         return self.starting_amount
-        
-    def run_buy_and_sell_strategy(self,automate):
-        market_open = self.market_open()
-        answer = True
-        today = datetime.now()
-        sold_symbols = []
-        symbols_sell_ratings = get_sell_rating(self)
-        if(symbols_sell_ratings != None):
-            for symbol in symbols_sell_ratings.items():
-                position_size = 1
-                sold = False
-                days_hold = get_days_hold(symbol[0],today,self.orders_history_df)
-                selling_price = get_symbol_price(symbol[0])
-                trade_return = (selling_price - self.holdings[symbol[0]]['AveragePrice'])/self.holdings[symbol[0]]['AveragePrice']*100
-                size = self.holdings[symbol[0]]['Quantity']
-                if(symbol[1]['rank'] >= SELL_RANK):
-                    if(MINIMUN_MINUS_SELL > trade_return or trade_return > MINIMUN_SELL):
-                        if(days_hold < 15):
-                            if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-8))):
-                                sold_symbols.append(symbol[0])
-                                sold = True
-                                # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                        elif(symbol[1]['rank'] >= SELL_RANK):
-                            sold_symbols.append(symbol[0])
-                            sold = True
-                            # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                if(not sold and (MINIMUN_MINUS_SELL > trade_return or trade_return > MINIMUN_SELL)):
-                    stoploss_rule = get_stoploss_rule(symbol[1]['rules'])
-                    if(stoploss_rule == NO_STOPLOSS): continue
-                    if(symbol[0] in self.orders_history_df.index): #?its mean first time selling this ticker
-                        past_sell_rules = self.orders_history_df.loc[symbol[0],"Sell Rules"]
-                        if(not pd.isna(past_sell_rules)): 
-                            if(stoploss_rule in past_sell_rules): continue
-                    all_sell_rules = []
-                    all_sell_rules.append(self.orders_history_df[symbol[0],'Sell Rules'])
-                    all_sell_rules.append(stoploss_rule)
-                    position_size = sell_rule_to_position_size(stoploss_rule)
-                    sold_symbols.append(symbol[0])
+    
+    def update_ts_session(self,session):
+        self.ts_session = session
 
-                    # self.place_sell_order(symbol[0],selling_date,selling_price,symbol[1]['rules'],position_size)
-                    self.update_orders()
-                    self.update_portfolio()
-            if(market_open and self.queue_orders): self.wait_for_confirm_sell_order() #TODO: need to fix sell symbol, close app- enter and still wanna tobuy problem
+    def execute_buy_order(self,symbol,symbol_price):
+        position_size = 1
+        if(self.is_holding(symbol) and symbol in self.orders_history_df.index):
+            position_size = 1 - self.orders_history_df.loc[symbol,'Position Left']
+            self.orders_history_df.loc[symbol,'Position Left'] = 1 
+        size = int((self.trade_size_cash*position_size) / float(symbol_price))
+        ts.place_order(self.ts_session,symbol,size,buy_sell="BUY")
+        # self.buy(symbol, size)
+
+    def execute_sell_order(self,symbol,size):
+        self.sold_symbols.append(symbol)
+        self.orders_history_df = self.orders_history_df.drop(symbol)
+        ts.place_order(self.ts_session,symbol,size,buy_sell="SELL")
+        # self.sell(symbol,size)
+
+    def execute_stoploss(self,symbol,size,stoploss_rule,today,position_size = 1):
+        all_sell_rules = []
+        all_sell_dates = []
+        self.sold_symbols.append(symbol)
+        position_size = sell_rule_to_position_size(stoploss_rule) 
+        position_left = 1 - position_size
+        if(symbol not in self.orders_history_df.index):
+            self.orders_history_df.loc[symbol] = {'Ticker': symbol,'Position Left': position_left}
+        else:
+            all_sell_rules = list(self.orders_history_df.loc[symbol,'Stoploss Rules'])
+            all_sell_dates = list(self.orders_history_df.loc[symbol,'Dates'])
+            self.orders_history_df.loc[symbol,'Position Left'] = self.orders_history_df.loc[symbol,'Position Left'] - position_size
+        all_sell_rules.append(stoploss_rule)
+        all_sell_dates.append(today)
+        self.orders_history_df.at[symbol,'Stoploss Rules'] = all_sell_rules
+        self.orders_history_df.at[symbol,'Dates'] = all_sell_dates
+        if(self.orders_history_df.loc[symbol,'Position Left'] < MINIMUN_SELL_POSITION_SIZE ):
+            self.orders_history_df = self.orders_history_df.drop(symbol) 
+            position_size = 1
+        quantity_sell = size*position_size
+        ts.place_order(self.ts_session,symbol,quantity_sell,buy_sell="SELL")
+        # self.sell(symbol,quantity_sell)
         
-        if(self.cash - self.queue_buying_money + self.queue_selling_money >= self.trade_size_cash - self.leverage_amount):
-            symbols_buy_ratings = get_buy_ratings(self)
-            symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
-            for symbol in symbols_buy_ratings.items():
-                if((symbol[1]['rank'] >= BUY_RANK) and (not self.is_holding(symbol[0])) and (self.cash - self.queue_buying_money + self.queue_selling_money >= self.trade_size_cash - self.leverage_amount) and (symbol[0] not in sold_symbols)):
-                    size = int(self.trade_size_cash / float(symbol[1]['price']))
-                    if answer:
-                        if(self.buy(symbol[0], size) != SUCCESS):
-                            return
-                        if(market_open):
-                            if(self.wait_for_confirm_buy_order(symbol[0], size) != SUCCESS):
-                                return
+    def run_strategy(self):
+        try:
+            market_open = self.market_open() 
+            today = datetime.now()
+            self.sold_symbols = []
+            symbols_sell_ratings = get_sell_rating(self) 
+            if(symbols_sell_ratings != None):
+                for symbol in symbols_sell_ratings.items():
+                    sold = False
+                    days_hold = get_days_hold(symbol[0],today,self.orders_history_df) 
+                    trade_return = get_position_return(self,symbol[0])#todo: check if Unrealized pl is ture
+                    size = self.holdings[symbol[0]]['Quantity']
+                    if(symbol[1]['rank'] >= SELL_RANK):
+                        if(MINIMUN_MINUS_SELL > trade_return or trade_return > MINIMUN_SELL):
+                            if(days_hold < 15):
+                                if(symbol[1]['rank'] >= SELL_RANK_HARD or (symbol[1]['rank'] >= SELL_RANK and trade_return <= (-8))):
+                                    sold = True
+                                    self.execute_sell_order(symbol[0],size,symbol[1]['rules'])
+                            elif(symbol[1]['rank'] >= SELL_RANK):
+                                sold = True
+                                self.execute_sell_order(symbol[0],size,symbol[1]['rules'])
+                    if(not sold and (MINIMUN_MINUS_SELL > trade_return or trade_return > MINIMUN_SELL)):
+                        sold = True
+                        stoploss_rule = get_stoploss_rule(symbol[1]['rules'])
+                        if(stoploss_rule == NO_STOPLOSS): continue
+                        if(used_rule(self,symbol[0],stoploss_rule)): continue
+                        self.execute_stoploss(symbol[0],size,stoploss_rule,today)
+                    if(sold):
                         self.update_orders()
                         self.update_portfolio()
+                if(market_open and self.queue_orders): self.wait_for_confirm_sell_order() #TODO: need to fix sell symbol, close app- enter and still wanna tobuy problem
+            
+            if(self.cash - self.queue_buying_money + self.queue_selling_money >= self.trade_size_cash - self.leverage_amount):
+                symbols_buy_ratings = get_buy_ratings(self) 
+                symbols_buy_ratings = {key:value for key, value in sorted(symbols_buy_ratings.items(), key=lambda x: x[1]['rank'],reverse=True)}
+                for symbol in symbols_buy_ratings.items():
+                    if((symbol[1]['rank'] >= BUY_RANK) and (self.cash - self.queue_buying_money + self.queue_selling_money >= self.trade_size_cash - self.leverage_amount) and (symbol[0] not in self.sold_symbols)):
+                        if(self.is_holding_full_size(symbol[0])): continue
+                        symbol_price = get_symbol_price(self,symbol[0])
+                        self.execute_buy_order(symbol[0],symbol_price)
+                        self.wait_for_confirm_buy_order(symbol[0])
+                        self.update_orders()
+                        self.update_portfolio()
+            self.upload_df_to_gcloud()
+        except BucketError as e:
+            raise e
+        except ConnectionError as e:
+            raise e
+        except Exception:
+            _, exc_value, exc_traceback = sys.exc_info()
+            error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+            line_exception = exc_traceback.tb_lineno
+            cause = None
+            if(exc_value.args):
+                cause = exc_value.args[0]
+            raise PortfolioStrategyError(line_exception,"ERROR",cause,error_file)
 
-    def wait_for_confirm_buy_order(self, symbol, size): #TODO: I can do it also with order info - Filled 
+    def wait_for_confirm_buy_order(self, symbol): 
         finish_buy = False
         counter = 0
-        while(not finish_buy and counter < 10):
-            self.holdings = self.get_holdings()
-            if(self.is_holding(symbol)):
-                if(self.holdings[symbol]['Quantity'] == size):
-                    finish_buy = True
-            time.sleep(2)
-            counter += 1
-        if(counter == 10):
-            print(f'{symbol}: Order still not confirmed, Closing Strategy\nPlease check order Status')
-            return FAILED_ORDER
-        print(f'{symbol} Order confirmed')
-        return SUCCESS
+        while(not finish_buy):
+            symbol_order = self.get_order(symbol)
+            if(symbol_order == NOT_EXIST): return
+            if(symbol_order['Status'] == 'Filled'):
+                finish_buy = True
+            else:
+                time.sleep(2)
+                counter = counter + 1
+            if(counter >= 60):
+                print(json.dumps({'message': f'After {60*2/60} minutes Order still not confirmed, Closing Strategy\nPlease check order Status',"severity": "INFO"}))
+                return
+        print(json.dumps({"message": f'{symbol} Order confirmed' ,"severity": "INFO"}))
+        return 
 
-    def wait_for_confirm_sell_order(self): 
+    def wait_for_confirm_sell_order(self): #TODO: need to check it 
         finish_sell_orders = False
         found = False
         while(not finish_sell_orders):
@@ -173,35 +200,37 @@ class Portfolio:
         self.update_orders()
         self.update_portfolio()
 
-    def wait_for_confirm_sell_order_old(self, symbol):
-        finish_sell = False
-        counter = 0
-        while(not finish_sell and counter < 10):
-            self.holdings = self.get_holdings()
-            if(not self.is_holding(symbol)):
-                    finish_sell = True
-            time.sleep(2)
-            counter += 1
-        if(counter == 10):
-            print(f'{symbol}: Order still not confirmed, Closing Strategy\nPlease check order Status')
-            return FAILED_ORDER
-        print(f'{symbol} Order confirmed')
-        return SUCCESS
+    def upload_df_to_gcloud(self):
+        try:
+            client = storage.Client(project=PROJECT_NAME)
+            bucket = client.get_bucket(STORAGE_BUCKET_NAME)
+            bucket.blob('bla').upload_from_string(self.orders_history_df.to_csv(),'text/csv')
+            print(json.dumps({"message": "Successfuly Uploaded Dataframe", "severity": "INFO"}))
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            file_name = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+            line_exception = exc_traceback.tb_lineno
+            cause = None
+            if(exc_value.args):
+                cause = exc_value.args[0]
+            raise BucketError(project_name=PROJECT_NAME,bucket=STORAGE_BUCKET_NAME,severity='ERROR',line=line_exception,error_file= file_name,cause = cause)
+
         
-    def get_cash(self):
+    def get_cash(self): #TODO: change it to ts
         try:
             url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
-            headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
+            headers = {"Authorization":f'Bearer {self.ts_session["access_token"]}'}
             account_details = requests.request("GET", url, headers=headers)
             account_details = json.loads(account_details.text)
-            if(int(account_details['Balances'][0]['AccountID']) == ACCOUNT_ID):
-                return float(account_details['Balances'][0]['CashBalance'])
-            else: 
-                print("PROBLEM WITH FINDING YOUR TRADE STATION ACCOUNT - PROBLEM ACCURED IN 'get_cash' function")
-                return 0
-        except Exception:
-            print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
-            return 0
+            return float(account_details['Balances'][0]['CashBalance'])
+        except:
+            _, exc_value, exc_traceback = sys.exc_info()
+            error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+            line_exception = exc_traceback.tb_lineno
+            cause = None
+            if(exc_value.args):
+                cause = exc_value.args[0]
+            raise ConnectionError(url,line_exception,"ERROR",cause,error_file)
         
         
     def market_open(self):
@@ -215,34 +244,25 @@ class Portfolio:
     def get_equity(self):
         try:
             url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/balances"
-            headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
+            headers = {"Authorization":f'Bearer {self.ts_session["access_token"]}'}
             account_details = requests.request("GET", url, headers=headers)
             account_details = json.loads(account_details.text)
-            if(int(account_details['Balances'][0]['AccountID']) == ACCOUNT_ID):
-                return float(account_details['Balances'][0]['MarketValue'])
-            else: 
-                print("PROBLEM WITH FINDING YOUR TRADE STATION ACCOUNT - PROBLEM ACCURED IN 'get_equity' function")
-                return 0
-        except Exception:
-            print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
-            return 0
+            return float(account_details['Balances'][0]['MarketValue'])
+        except:
+            _, exc_value, exc_traceback = sys.exc_info()
+            error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+            line_exception = exc_traceback.tb_lineno
+            cause = None
+            if(exc_value.args):
+                cause = exc_value.args[0]
+            raise ConnectionError(url,line_exception,"ERROR",cause,error_file)
 
-    def get_last_price(self,symbol):
-        try:
-            url = f"https://api.tradestation.com/marketdata/stream/quotes/{symbol}"
-            headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
-            symbol_details = requests.request("GET", url, headers=headers)
-            symbol_details = json.loads(symbol_details.text)
-            return float(symbol_details['Last'])
-        except Exception:
-            print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
-            return None
 
     def get_holdings(self):
         holdings = {}
         try:
             url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/positions"
-            headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
+            headers = {"Authorization":f'Bearer {self.ts_session["access_token"]}'}
             account_details = requests.request("GET", url, headers=headers)
             account_details = json.loads(account_details.text)
             for position in account_details['Positions']:
@@ -260,31 +280,53 @@ class Portfolio:
                     "AveragePrice":average_price,"UnrealizedProfitLossPercent":trade_yield,"TotalCost":total_cost,"MarketValue":market_value,'Timestamp':time_stamp}
             return holdings
         except Exception:
-            print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
-            return holdings             
+            _, exc_value, exc_traceback = sys.exc_info()
+            error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+            line_exception = exc_traceback.tb_lineno
+            cause = None
+            if(exc_value.args):
+                cause = exc_value.args[0]
+            raise ConnectionError(url,line_exception,"ERROR",cause,error_file)             
 
-    def get_orders_history():
-        client = storage.Client(project=PROJECT_NAME)
-        bucket = client.get_bucket(STORAGE_BUCKET_NAME)
-        blob = bucket.blob(ORDERS_HISTORY_FILE)
-        if(blob.exists()):
-            return pd.read_csv(f'gs://{STORAGE_BUCKET_NAME}/{ORDERS_HISTORY_FILE}', encoding='utf-8')
-        else:
-            message = "Could Not Reading Orders History csv file, please check why "
-            print(json.dumps({"message": message, "severity": "WARNING"}))
-            # exit(1)#TODO: need to keep the while loop running! 0_0 
-            orders_history_df = pd.DataFrame(columns=['Dates','Ticker','Position Size','Buy Rules','Sell Rules'])
-            orders_history_df = orders_history_df.set_index('Ticker')
-            bucket.blob(ORDERS_HISTORY_FILE).upload_from_string(orders_history_df,'text/csv')
-            print(json.dumps({"message": "Uploaded Empty Dataframe file", "severity": "INFO"}))
-            return orders_history_df
+    def get_orders_file(self):
+        try:
+            client = storage.Client(project=PROJECT_NAME)
+            bucket = client.get_bucket(STORAGE_BUCKET_NAME)
+            blob = bucket.blob(ORDERS_HISTORY_FILE)
+            if(blob.exists()):
+                self.orders_history_df = pd.read_csv(f'gs://{STORAGE_BUCKET_NAME}/{ORDERS_HISTORY_FILE}', encoding='utf-8')
+        except:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+            line_exception = exc_traceback.tb_lineno
+            cause = None
+            if(exc_value.args):
+                cause = exc_value.args[0]
+            raise BucketError(project_name=PROJECT_NAME,bucket=STORAGE_BUCKET_NAME,file_name=ORDERS_HISTORY_FILE,severity='ERROR',line=line_exception,error_file= error_file,cause = cause)
 
     def get_orders(self):
-        url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/orders"
-        headers = {"Authorization":f'Bearer {self.trade_station.TOKENS.access_token}'}
-        orders_details = requests.request("GET", url, headers=headers)
-        orders_details = json.loads(orders_details.text)
-        return orders_details
+        try:
+            url = "https://api.tradestation.com/v3/brokerage/accounts/11509188/orders"
+            headers = {"Authorization":f'Bearer {self.ts_session["access_token"]}'}
+            orders_details = requests.request("GET", url, headers=headers)
+            orders_details = json.loads(orders_details.text)
+            return orders_details
+        except:
+            _, exc_value, exc_traceback = sys.exc_info()
+            error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+            line_exception = exc_traceback.tb_lineno
+            cause = None
+            if(exc_value.args):
+                cause = exc_value.args[0]
+            raise ConnectionError(url,line_exception,"ERROR",cause,error_file)
+
+    def get_order(self,symbol):
+        orders = self.get_orders()
+        if(orders['Orders']):
+            for order in orders:
+                if(order['Legs'][0]['Symbol'] == symbol):
+                    return order
+        return NOT_EXIST #TODO: do i need tto rasie exception?
 
     def update_portfolio(self):
         self.cash = self.get_cash()
@@ -295,39 +337,48 @@ class Portfolio:
         self.leverage_amount = LEVERAGE_SIZE * self.net_wealth
 
     def update_orders(self):
-        queue_buy_money = 0
-        queue_sell_money = 0
-        orders = self.get_orders()
-        for order in orders['Orders']:
-            symbol = order['Legs'][0]['Symbol']
-            size = order['Legs'][0]['QuantityOrdered']
-            open_time = order['OpenedDateTime']
-            buy_or_sell =order['Legs'][0]['BuyOrSell']
-            order_type = order['OrderType']
-            order_status = order['Status']
-            status_description = order['StatusDescription']
-            order_price = order['PriceUsedForBuyingPower']
-            if(status_description == 'Queued' or status_description == 'Received' or status_description == 'Sent'):
-                self.queue_orders[symbol] = {'Quantity': size, 'Price': order_price ,'Open Time': open_time, 'Order Type': order_type,
-                        'Buy or Sell': buy_or_sell,'Order Status': order_status, 'Status Description': status_description}
-                self.orders[symbol] = {'Quantity': size, 'Price': order_price ,'Open Time': open_time, 'Order Type': order_type,
-                        'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
+        try:
+            queue_buy_money = 0
+            queue_sell_money = 0
+            orders = self.get_orders()
+            for order in orders['Orders']:
+                symbol = order['Legs'][0]['Symbol']
+                size = order['Legs'][0]['QuantityOrdered']
+                open_time = order['OpenedDateTime']
+                buy_or_sell =order['Legs'][0]['BuyOrSell']
+                order_type = order['OrderType']
+                order_status = order['Status']
+                status_description = order['StatusDescription']
+                order_price = order['PriceUsedForBuyingPower']
+                if(status_description == 'Queued' or status_description == 'Received' or status_description == 'Sent'):
+                    self.queue_orders[symbol] = {'Quantity': size, 'Price': order_price ,'Open Time': open_time, 'Order Type': order_type,
+                            'Buy or Sell': buy_or_sell,'Order Status': order_status, 'Status Description': status_description}
+                    self.orders[symbol] = {'Quantity': size, 'Price': order_price ,'Open Time': open_time, 'Order Type': order_type,
+                            'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
 
-                if(buy_or_sell == 'Buy'):
-                    queue_buy_money = queue_buy_money + (int(size) * float(order_price))  
+                    if(buy_or_sell == 'Buy'):
+                        queue_buy_money = queue_buy_money + (int(size) * float(order_price))  
 
-                if(buy_or_sell == 'Sell'):
-                    queue_sell_money = queue_sell_money + (int(size) * float(order_price))  
-            elif(status_description == 'Filled'):
-                self.filled_orders[symbol] = {'Quantity': size, 'Filled Price': order['FilledPrice'] ,'Open Time': open_time, 'Order Type': order_type,
-                        'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
-                self.orders[symbol] = {'Quantity': size, 'Filled Price': order['FilledPrice'] ,'Open Time': open_time, 'Order Type': order_type,
-                        'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
-            else:
-                self.orders[symbol] = {'Quantity': size, 'Price': order_price ,'Open Time': open_time, 'Order Type': order_type,
-                         'Order Status': order_status, 'Status Description': status_description}
-            self.queue_buying_money = queue_buy_money
-            self.queue_selling_money = queue_sell_money
+                    if(buy_or_sell == 'Sell'):
+                        queue_sell_money = queue_sell_money + (int(size) * float(order_price))  
+                elif(status_description == 'Filled'):
+                    self.filled_orders[symbol] = {'Quantity': size, 'Filled Price': order['FilledPrice'] ,'Open Time': open_time, 'Order Type': order_type,
+                            'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
+                    self.orders[symbol] = {'Quantity': size, 'Filled Price': order['FilledPrice'] ,'Open Time': open_time, 'Order Type': order_type,
+                            'Buy or Sell': buy_or_sell, 'Order Status': order_status, 'Status Description': status_description}
+                else:
+                    self.orders[symbol] = {'Quantity': size, 'Price': order_price ,'Open Time': open_time, 'Order Type': order_type,
+                            'Order Status': order_status, 'Status Description': status_description}
+                self.queue_buying_money = queue_buy_money
+                self.queue_selling_money = queue_sell_money
+        except:
+            _, exc_value, exc_traceback = sys.exc_info()
+            error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+            line_exception = exc_traceback.tb_lineno
+            cause = None
+            if(exc_value.args):
+                cause = exc_value.args[0]
+            raise UpdatePortfolioError(line_exception,"ERROR",cause,error_file)
 
     def is_holding(self,symbol):
         for ticker in self.holdings.items():
@@ -336,119 +387,77 @@ class Portfolio:
             if(order[0] == symbol): return True
         return False
 
-    def update_orders_df(self,ticker,dates,position_size=None,buy_rules=None,sell_rules=None):
-        self.orders_history_df[ticker] =  {"Dates":dates,"Position Size":position_size,"Buy Rules": buy_rules,"Sell Rules": sell_rules}
+    def is_holding_full_size(self,symbol):
+        if(self.is_holding(symbol)):
+            if(symbol not in self.orders_history_df.index): return True
+        return False
+
+    def update_orders_df(self,ticker,dates,position_size=None,sell_rules=None):
+        self.orders_history_df[ticker] =  {"Dates":dates,"Position Left":position_size,"Stoploss Rules": sell_rules}
+
+def get_buy_ratings(self:Portfolio):
+    try:
+        rating = {}
+        market_rank = 0
+        for etf in self.etfs_to_buy:
+            symbol_data_day = pd.DataFrame(yf.download(tickers=etf, period='5y',interval='1d',progress=False)).dropna()
+            symbol_data_month = pd.DataFrame(yf.download(tickers=etf, period='5y',interval='1mo',progress=False)).dropna()
+            symbol_data_weekly = pd.DataFrame(yf.download(tickers=etf, period='5y',interval='1wk',progress=False)).dropna()
+            rating[etf] = buy_rate(self,symbol_data_month,symbol_data_weekly,symbol_data_day,etf,market_rank)
+        return rating
+    except:
+        _, exc_value, exc_traceback = sys.exc_info()
+        error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+        line_exception = exc_traceback.tb_lineno
+        cause = None
+        if(exc_value.args):
+            cause = exc_value.args[0]
+        raise YhaooDownloadDataError(etf,line_exception,"ERROR",cause,error_file)
+
+def get_sell_rating(self:Portfolio):
+    try:
+        rating = {}
+        market_rank = 0
+        if(not self.holdings):
+            return None
+        for symbol in self.holdings.items():
+            symbol_data_day = pd.DataFrame(yf.download(tickers=symbol[0], period='5y',interval='1d',progress=False)).dropna()
+            symbol_data_month = pd.DataFrame(yf.download(tickers=symbol[0], period='5y',interval='1mo',progress=False)).dropna()
+            symbol_data_weekly = pd.DataFrame(yf.download(tickers=symbol[0], period='5y',interval='1wk',progress=False)).dropna()
+            rating[symbol[0]] = sell_rate(self,symbol_data_month,symbol_data_weekly,symbol_data_day,symbol[0],market_rank)
+        return rating
+    except:
+        _, exc_value, exc_traceback = sys.exc_info()
+        error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+        line_exception = exc_traceback.tb_lineno
+        cause = None
+        if(exc_value.args):
+            cause = exc_value.args[0]
+        raise YhaooDownloadDataError(symbol[0],line_exception,"ERROR",cause,error_file)
 
 
-    def buy(self,symbol,quantity,order_type='Market'):
-        #order_type = "Limit" "StopMarket" "Market" "StopLimit"
-        #"TimeInForce": {"Duration": "DAY"\ 'GTC'
-        url = "https://api.tradestation.com/v3/orderexecution/orders"
-        payload = {
-            "AccountID": f"{ACCOUNT_ID}",
-            "Symbol": f"{symbol}",
-            "Quantity": f"{quantity}",
-            "OrderType": f"{order_type}",
-            "TradeAction": "BUY",
-            "TimeInForce": {"Duration": "GTC"},#!need to check how to put just daily order
-            "Route": "Intelligent"
-        }
-        headers = {
-            "content-type": "application/json",
-            "Authorization": f'Bearer {self.trade_station.TOKENS.access_token}'
-        }
-
-        response = requests.request("POST", url, json=payload, headers=headers)
-        response =  json.loads(response.text)
-
-        try:
-            print(f"Error Type: {response['Error']}\nError Message: {response['Message']}\nProgram was stopped")
-            return ERROR_ORDER
-        except:
-            print(response['Orders'][0]['Message'])
-            return SUCCESS
-
-    def sell(self,symbol,quantity,order_type='Market'):
-        #order_type = "Limit" "StopMarket" "Market" "StopLimit"
-        url = "https://api.tradestation.com/v3/orderexecution/orders"
-        payload = {
-            "AccountID": f"{ACCOUNT_ID}",
-            "Symbol": f"{symbol}",
-            "Quantity": f"{quantity}",
-            "OrderType": f"{order_type}",
-            "TradeAction": "SELL",
-            "TimeInForce": {"Duration": "GTC"}, #!need to check how to put just daily order
-            "Route": "Intelligent"
-        }
-        headers = {
-            "content-type": "application/json",
-            "Authorization": f'Bearer {self.trade_station.TOKENS.access_token}'
-        }
-
-        response = requests.request("POST", url, json=payload, headers=headers)
-        response =  json.loads(response.text)
-
-        try:
-            print(f"Error Type: {response['Error']}\nError Message: {response['Message']}\nProgram was stopped")
-            return ERROR_ORDER
-        except:
-            print(response['Orders'][0]['Message'])
-            return SUCCESS
-
-def get_buy_ratings(self):
-    rating = {}
-    market_rank = 0
-    if(self.market_sentiment != None): market_rank = self.market_sentiment.get_sentiment_score()
-    for etf in self.etfs_to_buy:
-        symbol_data_day = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1d',progress=False)).dropna()
-        symbol_data_month = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1mo',progress=False)).dropna()
-        symbol_data_weekly = pd.DataFrame(yf.download(tickers=etf, period='max',interval='1wk',progress=False)).dropna()
-        rating[etf] = buy_rate(self,symbol_data_month,symbol_data_weekly,symbol_data_day,etf,market_rank)
-    return rating
-
-def get_sell_rating(self):
-    rating = {}
-    market_rank = 0
-    if(self.market_sentiment != None): market_rank = self.market_sentiment.get_sentiment_score()
-    if(not self.holdings):
-        return None
-    for symbol in self.holdings.items():
-        symbol_data_day = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1d',progress=False)).dropna()
-        symbol_data_month = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1mo',progress=False)).dropna()
-        symbol_data_weekly = pd.DataFrame(yf.download(tickers=symbol[0], period='max',interval='1wk',progress=False)).dropna()
-        rating[symbol[0]] = sell_rate(self,symbol_data_month,symbol_data_weekly,symbol_data_day,symbol[0],market_rank)
-    return rating
-
-
-def buy_rate(self,data_monthly,data_weekly,data_day,etf,market_rank):
+def buy_rate(self:Portfolio,data_monthly:pd.DataFrame,data_weekly:pd.DataFrame,data_day:pd.DataFrame,etf,market_rank):
     #TODO: last day line 397 need to check diffrence when market is open!
     rank = 0
     # rank += market_rank
     today = date.today()
     buy_rules = []
-    buy_ret = {'rank':rank,'rules': buy_rules,'price': 0}
+    buy_ret = {'rank':rank,'rules': buy_rules}
     seq_daily = SequenceMethod(data_day,'day',today)
     seq_weekly = SequenceMethod(data_weekly,'weekly',today)
     seq_month = SequenceMethod(data_monthly,'monthly',today)
-    avg_weekly_move = seq_weekly.get_avg_up_return()
-    start_move_price = check_seq_price_by_date_weekly(seq_weekly.get_seq_df(),today)
     last_5_days = today - timedelta(days=12)
     last_5_days = data_day.truncate(before=last_5_days, after=today)
     if(last_5_days.shape[0] >=5 ): last_5_days = last_5_days.tail(last_5_days.shape[0] - (last_5_days.shape[0] - 5)) 
-    print(last_5_days)
     if(self.market_open()):last_day = last_5_days.tail(2).head(1) #TODO: need tothink if this is what i want
     else: last_day = last_5_days.tail(1)
-    print(last_day)
     last_seq_date = seq_daily.get_seq_df()['Date'].iloc[-1]
-    daily_price =  get_symbol_price(self,etf)
-    if(daily_price != None and start_move_price != None): move_return = (daily_price - start_move_price)/start_move_price*100
-    else: move_return = None
-    data_day['SMA13'] = ta.SMA(data_day['Close'],timeperiod=13)
-    data_day['SMA5'] = ta.SMA(data_day['SMA13'], timeperiod=5)
-    data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
-    data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
-    data_monthly['SMA13'] = ta.SMA(data_monthly['Close'],timeperiod=13)
-    data_monthly['SMA5'] = ta.SMA(data_monthly['SMA13'], timeperiod=5)
+    data_day['SMA13'] = data_day['Close'].rolling(window=13).mean()
+    data_day['SMA5'] = data_day['SMA13'].rolling(window=5).mean()
+    data_weekly['SMA13'] = data_weekly['Close'].rolling(window=13).mean()
+    data_weekly['SMA5'] = data_weekly['SMA13'].rolling(window=5).mean()
+    data_monthly['SMA13'] = data_monthly['Close'].rolling(window=13).mean()
+    data_monthly['SMA5'] = data_monthly['SMA13'].rolling(window=5).mean()
     data_day = data_day.dropna()
     data_weekly = data_weekly.dropna()
     data_monthly = data_monthly.dropna()
@@ -456,10 +465,10 @@ def buy_rate(self,data_monthly,data_weekly,data_day,etf,market_rank):
     pre_week = today - timedelta(days=7*4)
     last_month = month - timedelta(days=1) 
     last_month = last_month.replace(day = 1)
-    pre_month = today.replace(day =1)
+    three_months_back = today.replace(day =1)
     for i in range(3):
-        pre_month = pre_month - timedelta(days=1)
-        pre_month = pre_month.replace(day = 1)
+        three_months_back = three_months_back - timedelta(days=1)
+        three_months_back = three_months_back.replace(day = 1)
 
     if(float(last_day.loc[str(last_day.index[-1]),'Close']) > float(data_day.loc[str(last_day.index[-1]),'SMA13']) and check_seq_by_date_daily_equal(seq_daily.get_seq_df(),today) == 1
          and (last_day.index[-1].date() - last_seq_date).days == 0):
@@ -471,7 +480,6 @@ def buy_rate(self,data_monthly,data_weekly,data_day,etf,market_rank):
         buy_rules.append('3')
     else :
         buy_ret['rank'] = rank
-        buy_ret['price'] = daily_price
         buy_ret['rules'] = buy_rules
         return buy_ret
     if(check_seq_by_date_monthly(seq_month.get_seq_df(),today) == 1):
@@ -487,20 +495,16 @@ def buy_rate(self,data_monthly,data_weekly,data_day,etf,market_rank):
     if(is_moving_away_weekly(data_weekly,today,pre_week)):
         rank += 1
         buy_rules.append('7')
-    if(is_moving_away_monthly(data_monthly,last_month,pre_month)):
+    if(is_moving_away_monthly(data_monthly,last_month,three_months_back)):
         rank += 1
         buy_rules.append('8')
-    # if(move_return != None and move_return <= avg_weekly_move/2): #was 2.5
-    #     rank += 1
-    #     buy_rules.append('9')
 
     buy_ret['rank'] = rank
-    buy_ret['price'] = daily_price
     buy_ret['rules'] = buy_rules
     return buy_ret
 
 
-def sell_rate(self,data_monthly,data_weekly,data_day,symbol,market_rank):
+def sell_rate(self: Portfolio,data_monthly:pd.DataFrame,data_weekly:pd.DataFrame,data_day:pd.DataFrame,symbol,market_rank):
     rank = 0
     sell_rules = []
     # rank = rank + (market_rank*(-1))
@@ -509,37 +513,30 @@ def sell_rate(self,data_monthly,data_weekly,data_day,symbol,market_rank):
     seq_daily = SequenceMethod(data_day,'day',today)
     seq_weekly = SequenceMethod(data_weekly,'weekly',today)
     seq_month = SequenceMethod(data_monthly,'monthly',today)
-    avg_weekly_move = seq_weekly.get_avg_up_return()
     last_5_days = today - timedelta(days=12)
     last_5_days = data_day.truncate(before=last_5_days, after=today)
     if(last_5_days.shape[0] >=5 ): last_5_days = last_5_days.tail(last_5_days.shape[0] - (last_5_days.shape[0] - 5)) 
-    print(last_day)
     if(self.market_open()):last_day = last_5_days.tail(2).head(1)
     else: last_day = last_5_days.tail(1)
-    print(last_day)
-    daily_price =  get_symbol_price(self,symbol)
     trade_yield = float(self.holdings[symbol]['UnrealizedProfitLossPercent'])
-    data_day['SMA13'] = ta.SMA(data_day['Close'],timeperiod=13)
-    data_day['SMA5'] = ta.SMA(data_day['SMA13'], timeperiod=5)
-    data_weekly['SMA13'] = ta.SMA(data_weekly['Close'],timeperiod=13)
-    data_weekly['SMA5'] = ta.SMA(data_weekly['SMA13'], timeperiod=5)
-    data_monthly['SMA13'] = ta.SMA(data_monthly['Close'],timeperiod=13)
-    data_monthly['SMA5'] = ta.SMA(data_monthly['SMA13'], timeperiod=5)
-    data_day["ATR"] = ta.ATR(data_day['High'], data_day['Low'], data_day['Close'], timeperiod=14)
-    data_weekly["ATR"] = ta.ATR(data_weekly['High'], data_weekly['Low'], data_weekly['Close'], timeperiod=14)
-    data_monthly["ATR"] = ta.ATR(data_monthly['High'], data_monthly['Low'], data_monthly['Close'], timeperiod=14)
+    data_day['SMA13'] = data_day['Close'].rolling(window=13).mean()
+    data_day['SMA5'] = data_day['SMA13'].rolling(window=5).mean()
+    data_weekly['SMA13'] = data_weekly['Close'].rolling(window=13).mean()
+    data_weekly['SMA5'] = data_weekly['SMA13'].rolling(window=5).mean()
+    data_monthly['SMA13'] = data_monthly['Close'].rolling(window=13).mean()
+    data_monthly['SMA5'] = data_monthly['SMA13'].rolling(window=5).mean()
+    data_day = atr_calculate(data_day)
+    data_weekly = atr_calculate(data_weekly)
+    data_monthly = atr_calculate(data_monthly)
     data_day['ATRP'] = (data_day['ATR']/data_day['Close'])*100
     data_weekly['ATRP'] = (data_weekly['ATR']/data_weekly['Close'])*100
     data_monthly['ATRP'] = (data_monthly['ATR']/data_monthly['Close'])*100
     data_day = data_day.dropna()
     data_weekly = data_weekly.dropna()
     data_monthly = data_monthly.dropna()
-    first_monthly_date = data_monthly.index[0].date()
-    first_weekly_date = data_weekly.index[0].date()
     month = today.replace(day=1)
     last_month = month - timedelta(days=1) 
     last_month = last_month.replace(day = 1)
-    last_week = today - timedelta(days=today.weekday(), weeks=1)
     if(float(last_day.loc[str(last_day.index[-1]),'Close']) < float(data_day.loc[str(last_day.index[-1]),'SMA13']) and check_seq_by_date_daily_equal(seq_daily.get_seq_df(),today) == -1):
         rank += 5
         sell_rules.append("2")
@@ -557,21 +554,17 @@ def sell_rate(self,data_monthly,data_weekly,data_day,symbol,market_rank):
         rank += 1
         sell_rules.append("5")
     if(float(data_day[symbol].loc[str(today),'ATRP'])*7 <= trade_yield):
-        # rank += SELL_RANK_HARD
         sell_rules.append('6')
     elif(float(data_day[symbol].loc[str(today),'ATRP'])*5 <= trade_yield):
-        # rank += SELL_RANK_HARD
         sell_rules.append('7')
     elif(float(data_day[symbol].loc[str(today),'ATRP'])*4 <= trade_yield):
-        # rank += SELL_RANK_HARD
         sell_rules.append('8')
     elif(float(data_day[symbol].loc[str(today),'ATRP'])*3 <= trade_yield):
-        # rank += SELL_RANK_HARD
         sell_rules.append('9')
 
     sell_ret['rank'] = rank
+    sell_ret['rules'] = sell_rules
     return sell_ret
-
 
 
 def is_moving_away_weekly(data_weekly,today,pre_week):
@@ -593,9 +586,18 @@ def is_moving_away_monthly(data_monthly,last_month,pre_month):
     return False
 
 def get_days_hold(symbol,today,orders_history):
-    dates_buy = orders_history.loc[symbol[0],'Dates']
-    days_hold = (today - dates_buy[0]).days
-    return days_hold
+    try:
+        dates_buy = list(orders_history.loc[symbol[0],'Dates'])
+        days_hold = (today - dates_buy[0]).days
+        return days_hold
+    except:
+        _, exc_value, exc_traceback = sys.exc_info()
+        error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+        line_exception = exc_traceback.tb_lineno
+        cause = None
+        if(exc_value.args):
+            cause = exc_value.args[0]
+        raise DataFrameError(line_exception,cause,error_file)
 
 def check_seq_by_date_monthly(seq,date):
     previous_row = 0
@@ -666,16 +668,47 @@ def print_order(status):
         return SUCCESS
 
 def get_symbol_price(self,symbol):
-    url = f"https://api.tradestation.com/v3/marketdata/quotes/{symbol}"
-    headers = {
-        "content-type": "application/json",
-        "Authorization": f'Bearer {self.trade_station.TOKENS.access_token}'
-    }
+    try:
+        url = f"https://api.tradestation.com/v3/marketdata/quotes/{symbol}"
+        headers = {
+            "content-type": "application/json",
+            "Authorization": f'Bearer {self.ts_session["access_token"]}'
+        }
 
-    response = requests.request("GET", url, headers=headers)
-    response =  json.loads(response.text)
-    return float(response['Quotes'][0]['Last'])
+        response = requests.request("GET", url, headers=headers)
+        response =  json.loads(response.text)
+        return float(response['Quotes'][0]['Last'])
+    except:
+        _, exc_value, exc_traceback = sys.exc_info()
+        error_file = os.path.basename(exc_traceback.tb_frame.f_code.co_filename)
+        line_exception = exc_traceback.tb_lineno
+        cause = None
+        if(exc_value.args):
+            cause = exc_value.args[0]
+        raise ConnectionError(url,line_exception,"ERROR",cause,error_file)
 
+def get_last_price(self,symbol):
+    try:
+        url = f"https://api.tradestation.com/marketdata/stream/quotes/{symbol}"
+        headers = {"Authorization":f'Bearer {self.ts_session["access_token"]}'}
+        symbol_details = requests.request("GET", url, headers=headers)
+        symbol_details = json.loads(symbol_details.text)
+        return float(symbol_details['Last'])
+    except Exception:
+        print(f"CONNECTION problem with TradeStation, accured while tried to check account balances, Details: \n {traceback.format_exc()}")
+        return None
+
+def get_position_return(self: Portfolio,symbol):
+    position_id = get_position_id(self,symbol)
+    position = ts.get_position_by_id(self.ts_session,position_id)
+    unrealized_return = position["UnrealizedProfitLossPercent"]
+    return float(unrealized_return)
+
+def get_position_id(self: Portfolio,symbol):
+    for position in self.holdings.items():
+        if(position[0] == symbol):
+            return position[1]['PositionID']
+    raise NotExist("Do not found symbol id in holdings",691,"portfolio.py")
 
 def sell_rule_to_position_size(rule):
     if(rule == '6'): return 1
@@ -691,8 +724,24 @@ def get_stoploss_rule(rules):
     if('9' in rules): return '9'
     return NO_STOPLOSS
 
+def used_rule(self: Portfolio,symbol,stoploss_rule):
+    # if(not pd.isna(past_sell_rules)): #TODO: do i really need it?
+    if(symbol in self.orders_history_df.index): #?its mean first time selling this ticker
+        past_sell_rules = self.orders_history_df.loc[symbol,"Stoploss Rules"]
+        if(stoploss_rule in past_sell_rules): return True
+    return False
 
-# columns=['Dates','Ticker','Position','Buy Rules','Sell Rules'])
+def atr_calculate(data):
+    high_low = data['High'] - data['Low']
+    high_close = np.abs(data['High'] - data['Close'].shift())
+    low_close = np.abs(data['Low'] - data['Close'].shift())
+    ranges = pd.concat([high_low, high_close, low_close], axis=1)
+    true_range = np.max(ranges, axis=1).dropna()
+    atr = true_range.rolling(14).sum()/14
+    data['ATR'] = atr
+    return data
+
+# columns=['Dates','Ticker','Position','Buy Rules','Stoploss Rules'])
     
 # # self.symbols_basket =  ['IYZ','XLY','XHB', 'PEJ','XLP','XLC','PBJ','XLE','XES','ICLN','XLF','KIE','KCE','KRE','XLV','PPH','XLI','IGF',
 #                 'XLK','FDN','XLU','FIW','FAN','XLRE','XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
@@ -709,24 +758,39 @@ def get_stoploss_rule(rules):
 # self.etfs_xlb = ['XLB','PYZ','XME','HAP','MXI','IGE','MOO','WOOD','COPX','FXZ','URA','LIT']
 
 
-today = datetime.now()
-orders_history_df = pd.DataFrame(columns=['Dates','Buy\Sell','Ticker','Position Size','Buy\Sell Price','Buy Rules','Sell Rules'])
-orders_history_df = orders_history_df.set_index('Ticker')
-dates= []
-dates.append(today)
-new_row= {"Dates":dates,"Position Size":220}
-orders_history_df.loc['AAPL'] = new_row
-new_row2= {"Dates":dates,"Position Size":None}
-orders_history_df.loc['TSLA'] = new_row2
-dates_buy = orders_history_df.loc["TSLA",'Dates']
-diff = (today-dates_buy[0]).days
-print(orders_history_df)
-# orders_history_df.loc['TSLA'] = new_row
-print(pd.isna(orders_history_df.loc['TSLA','Position Size']))
+# today = datetime.now()
+# orders_history_df = pd.DataFrame(columns=['Dates','Buy\Sell','Ticker','Position Left','Buy\Sell Price','Stoploss Rules'])
+# orders_history_df = orders_history_df.set_index('Ticker')
+# dates= []
+# sell_rules = ['6','7','8']
+# new_sell_rules = []
+# rule = '9'
+# dates.append(today)
+# new_row= {"Dates":dates,"Position Left":220}
+# orders_history_df.loc['AAPL'] = new_row
+# new_row2= {"Dates":dates,"Position Left":0.75,"Stoploss Rules":sell_rules}
+# orders_history_df.loc['TSLA'] = new_row2
+# dates_buy = orders_history_df.loc["TSLA",'Dates']
+# diff = (today-dates_buy[0]).days
+# print(orders_history_df)
+# position_size = 0.5
+# orders_history_df.loc['TSLA','Position Left'] = orders_history_df.loc['TSLA','Position Left'] - position_size
+# print(orders_history_df)
+# position_size = orders_history_df.loc['TSLA','Position Left']
+# print(orders_history_df)
+# print(position_size)
+# sell_rules = list(orders_history_df.loc['TSLA','Stoploss Rules'])
+# sell_rules.append(rule)
+# if('MSFT' not in orders_history_df):
+#     orders_history_df.loc['MSFT'] = {}
+# orders_history_df.at['MSFT','Stoploss Rules'] = sell_rules
+# print(orders_history_df)
+# print((orders_history_df.loc['TSLA','Stoploss Rules']))
 
-# ck1 = orders_history_df.loc['TSLA','Sell Rules']
+
+# ck1 = orders_history_df.loc['TSLA','Stoploss Rules']
 # if('MSA' in orders_history_df.index):
-#     ck2 = orders_history_df.loc['MSA','Sell Rules']
+#     ck2 = orders_history_df.loc['MSA','Stoploss Rules']
 # if(not pd.isna(ck1)):
 #     print(ck1)
 # print(ck2)
